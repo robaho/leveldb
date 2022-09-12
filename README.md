@@ -28,6 +28,8 @@ purge removed key/value, it currently stores an empty []byte
 
 snapshot support
 
+seek to end, backwards iteration
+
 # How To Use
 
 	db, err := level.Open("test/mydb", leveldb.Options{})
@@ -47,16 +49,21 @@ snapshot support
 
 Using example/performance.go
 
-<pre>
-Using Go 1.15.5:
-
-insert time  10000000 records =  17890 ms, usec per op  1.7890143
-close time  8477 ms
-scan time  2887 ms, usec per op  0.2887559
-scan time 50%  81 ms, usec per op  0.162584
-random access time  3.508029 us per get
-close with merge 1 time  0.148 ms
-scan time  2887 ms, usec per op  0.2887248
-scan time 50%  85 ms, usec per op  0.171406
-random access time  3.487226 us per get
-</pre>
+```
+Using Go 1.19:
+insert  time  10000000 records =  48406 ms, usec per op  4.8406189
+close time  2535 ms
+scan time  3943 ms, usec per op  0.3943393
+scan time 50%  69 ms, usec per op  0.138772
+random access time  3.490679 us per get
+insert NoFlush time  10000000 records =  12235 ms, usec per op  1.2235342
+close time  6556 ms
+scan time  3442 ms, usec per op  0.3442262
+scan time 50%  70 ms, usec per op  0.141112
+random access time  3.636962 us per get
+insert batch time  10000000 records =  11967 ms, usec per op  1.1967498
+close time  8024 ms
+scan time  3354 ms, usec per op  0.3354182
+scan time 50%  65 ms, usec per op  0.13129
+random access time  3.641579 us per get
+```

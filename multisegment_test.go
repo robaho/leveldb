@@ -6,11 +6,11 @@ import (
 )
 
 func TestMultiSegment(t *testing.T) {
-	m1 := newMemorySegment("", 0)
+	m1 := newMemoryOnlySegment()
 	for i := 0; i < 100000; i++ {
 		m1.Put([]byte(fmt.Sprint("mykey", i)), []byte(fmt.Sprint("myvalue", i)))
 	}
-	m2 := newMemorySegment("", 0)
+	m2 := newMemoryOnlySegment()
 	for i := 100000; i < 150000; i++ {
 		m2.Put([]byte(fmt.Sprint("mykey", i)), []byte(fmt.Sprint("myvalue", i)))
 	}
@@ -35,11 +35,11 @@ func TestMultiSegment(t *testing.T) {
 }
 
 func TestMultiSegment2(t *testing.T) {
-	m1 := newMemorySegment("", 0)
+	m1 := newMemoryOnlySegment()
 	for i := 0; i < 1; i++ {
 		m1.Put([]byte(fmt.Sprint("mykey", i)), []byte(fmt.Sprint("myvalue", i)))
 	}
-	m2 := newMemorySegment("", 0)
+	m2 := newMemoryOnlySegment()
 	for i := 1; i < 150000; i++ {
 		m2.Put([]byte(fmt.Sprint("mykey", i)), []byte(fmt.Sprint("myvalue", i)))
 	}

@@ -9,20 +9,27 @@ import (
 // in a transaction is limited by available memory. The skip list uses a nil Value to designate a key that
 // has been removed from the table
 type memorySegment struct {
-	list  SkipList[KeyValue]
-	log   *logFile
-	id    uint64
-	bytes int
-	path  string
+	list    SkipList[KeyValue]
+	log     *logFile
+	id      uint64
+	bytes   int
+	path    string
+	options Options
 }
 
-func newMemorySegment(path string, id uint64) *memorySegment {
+func newMemorySegment(path string, id uint64, options Options) *memorySegment {
 	ms := new(memorySegment)
 	ms.list = NewSkipList(KeyValueCompare)
 	ms.id = id
 	ms.path = path
+	ms.options = options
 
 	return ms
+}
+
+// Returns a segment without persistence, used for testing.
+func newMemoryOnlySegment() *memorySegment {
+	return newMemorySegment("", 0, Options{})
 }
 
 func (ms *memorySegment) ID() uint64 {
@@ -36,7 +43,7 @@ func (ms *memorySegment) maybeCreateLogFile() error {
 	if ms.path == "" {
 		return nil
 	}
-	log, err := newLogFile(ms.path, ms.id)
+	log, err := newLogFile(ms.path, ms.id, ms.options)
 	if err != nil {
 		return err
 	}

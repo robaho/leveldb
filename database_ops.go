@@ -110,7 +110,7 @@ func (db *Database) Write(wb WriteBatch) error {
 func (db *Database) maybeSwapMemory() {
 	if db.memory.bytes > db.options.MaxMemoryBytes {
 		db.segments = append(db.segments, db.memory)
-		db.memory = newMemorySegment(db.path, db.nextSegmentID())
+		db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
 		db.multi = newMultiSegment(append(db.segments, db.memory))
 	}
 }

@@ -42,6 +42,10 @@ type Options struct {
 	MaxSegments int
 	// Maximum size of memory segment in bytes.
 	MaxMemoryBytes int
+	// Disable flush to disk when writing to increase performance.
+	DisableWriteFlush bool
+	// Force sync to disk when writing. If true, then DisableWriteFlush is ignored.
+	EnableSyncWrite bool
 }
 
 // LookupIterator iterator interface for table scanning. all iterators should be read until completion
@@ -117,7 +121,7 @@ func open(path string, options Options) (*Database, error) {
 	}
 	atomic.StoreUint64(&db.nextSegID, uint64(maxSegID))
 	atomic.StoreUint64(&db.nextMergeId, uint64(maxMergeID))
-	db.memory = newMemorySegment(db.path, db.nextSegmentID())
+	db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
 	db.multi = newMultiSegment(append(db.segments, db.memory))
 	db.merger = make(chan bool)
 	db.options = options

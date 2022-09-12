@@ -46,7 +46,7 @@ func (d *dbDeleter) scheduleDeletion(ifExists string, filesToDelete []string) er
 		}
 		d.file = file
 	}
-	fmt.Printf("%s,%s\n", ifExists, strings.Join(filesToDelete, ","))
+	//fmt.Printf("%s,%s\n", ifExists, strings.Join(filesToDelete, ","))
 	_, err := fmt.Fprintf(d.file, "%s,%s\n", ifExists, strings.Join(filesToDelete, ","))
 	return err
 }
@@ -67,7 +67,7 @@ func (d *dbDeleter) deleteScheduled() error {
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := s.Text()
-		fmt.Println("deleted:", line)
+		//fmt.Println("deleted:", line)
 		files := strings.Split(line, ",")
 		path := filepath.Join(d.path, files[0])
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {

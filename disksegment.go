@@ -435,7 +435,7 @@ func (ds *diskSegment) removeSegment() error {
 	return errn(err0, err1, err2)
 }
 func (ds *diskSegment) removeOnFinalize() {
-	fmt.Println("scheduled ", ds.keyFile.Name(), "for deletion")
+	//fmt.Println("scheduled ", ds.keyFile.Name(), "for deletion")
 	runtime.SetFinalizer(ds, func(ds *diskSegment) { ds.removeSegment() })
 }
 func (ds *diskSegment) files() []string {

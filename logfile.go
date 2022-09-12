@@ -15,18 +15,28 @@ import (
 //	EndBatchMarker is { negative int32 length of batch which matches StartBatchMarker }
 //	LogEntry is { int32 key len, key bytes, int32 value len, value bytes }
 type logFile struct {
-	file    *os.File
-	w       *bufio.Writer
-	id      uint64
-	inBatch bool
+	file         *os.File
+	w            *bufio.Writer
+	id           uint64
+	inBatch      bool
+	syncWrite    bool
+	disableFlush bool
 }
 
-func newLogFile(path string, id uint64) (*logFile, error) {
-	f, err := os.Create(filepath.Join(path, "log."+fmt.Sprint(id)))
+func newLogFile(path string, id uint64, options Options) (*logFile, error) {
+	mode := os.O_TRUNC | os.O_WRONLY | os.O_CREATE
+	if options.EnableSyncWrite {
+		mode = mode | os.O_SYNC
+	}
+	f, err := os.OpenFile(filepath.Join(path, "log."+fmt.Sprint(id)), mode, 0644)
 	if err != nil {
 		return nil, err
 	}
-	return &logFile{file: f, id: id, w: bufio.NewWriter(f)}, nil
+	l := logFile{file: f, id: id, w: bufio.NewWriter(f)}
+	if !options.EnableSyncWrite && options.DisableWriteFlush {
+		l.disableFlush = true
+	}
+	return &l, nil
 }
 func (f *logFile) StartBatch(len int) error {
 	f.inBatch = true
@@ -57,7 +67,7 @@ func (f *logFile) Write(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
-	if !f.inBatch {
+	if !f.inBatch && !f.disableFlush {
 		return f.w.Flush()
 	}
 	return nil

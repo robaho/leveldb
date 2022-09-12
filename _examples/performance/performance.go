@@ -15,9 +15,19 @@ func main() {
 
 	runtime.GOMAXPROCS(4)
 
+	testInsert(false)
+	testRead()
+	testInsert(true)
+	testRead()
+	testInsertBatch()
+	testRead()
+}
+
+func testInsert(noflush bool) {
+
 	leveldb.Remove("test/mydb")
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, DisableWriteFlush: noflush})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}
@@ -30,7 +40,12 @@ func main() {
 	end := time.Now()
 	duration := end.Sub(start).Microseconds()
 
-	fmt.Println("insert time ", nr, "records = ", duration/1000, "ms, usec per op ", float64(duration)/nr)
+	s := ""
+	if noflush {
+		s = "NoFlush"
+	}
+
+	fmt.Println("insert", s, "time ", nr, "records = ", duration/1000, "ms, usec per op ", float64(duration)/nr)
 	start = time.Now()
 	err = db.Close()
 	end = time.Now()
@@ -40,21 +55,47 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
 
-	testRead()
+func testInsertBatch() {
+	err := leveldb.Remove("test/mydb")
 
-	db, err = leveldb.Open("test/mydb", leveldb.Options{})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true})
 	if err != nil {
-		log.Fatal("unable to open database", err)
+		log.Fatal("unable to create database", err)
 	}
+
+	start := time.Now()
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < nr; {
+
+		b := leveldb.WriteBatch{}
+		for j := 0; j < 1000; j++ {
+			b.Put([]byte(fmt.Sprintf("mykey%7d", i+j)), []byte(fmt.Sprint("myvalue", i+j)))
+		}
+		err = db.Write(b)
+		if err != nil {
+			log.Fatal("unable to Write batch", err)
+		}
+		i += 1000
+	}
+
+	end := time.Now()
+	duration := end.Sub(start).Microseconds()
+
+	fmt.Println("insert batch time ", nr, "records = ", duration/1000, "ms, usec per op ", float64(duration)/nr)
+
 	start = time.Now()
-	db.CloseWithMerge(1)
+	err = db.Close()
 	end = time.Now()
 	duration = end.Sub(start).Microseconds()
 
-	fmt.Println("close with merge 1 time ", float64(duration)/1000, "ms")
-
-	testRead()
+	fmt.Println("close time ", (duration)/1000, "ms")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func testRead() {

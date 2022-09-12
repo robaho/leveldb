@@ -1,0 +1,146 @@
+package leveldb
+
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strconv"
+	"time"
+)
+
+// merge segments for the database
+func mergeSegments(db *Database) {
+	defer db.wg.Done()
+	//defer fmt.Println("merger complete on "+db.path)
+
+	for {
+		select {
+		case <-time.After(time.Second):
+			break
+		case <-db.merger:
+			break
+		}
+		if db.closing || db.err != nil {
+			return
+		}
+
+		// the following prevents a Close from occurring while this
+		// routine is running
+
+		db.wg.Add(1)
+
+		err := mergeSegments0(db, db.options.MaxSegments)
+		if err != nil {
+			db.Lock()
+			db.err = errors.New("unable to merge segments: " + err.Error())
+			db.Unlock()
+		}
+
+		db.wg.Done()
+	}
+}
+
+func mergeSegments0(db *Database, segmentCount int) error {
+	var index = 0
+
+	for {
+
+		db.Lock()
+		segments := db.segments
+		db.Unlock()
+
+		if len(segments) <= segmentCount {
+			return nil
+		}
+
+		maxMergeSize := len(segments) / 2
+		if maxMergeSize < 4 {
+			maxMergeSize = 4
+		}
+
+		// ensure that only valid disk segments are merged
+
+		mergable := make([]segment, 0)
+
+		for _, s := range segments[index:] {
+			mergable = append(mergable, s)
+			if len(mergable) == maxMergeSize {
+				break
+			}
+		}
+
+		if len(mergable) < 2 {
+			if index == 0 {
+				return nil
+			}
+			index = 0
+			continue
+		}
+
+		id := mergable[len(mergable)-1].ID()
+		segments = segments[index : index+len(mergable)]
+
+		newseg, err := mergeSegments1(db.deleter, db.path, id, db.nextMergeID(), segments)
+		if err != nil {
+			return err
+		}
+
+		db.Lock() // need lock when updating db segments
+		segments = db.segments
+
+		for i, s := range mergable {
+			if s != segments[i+index] {
+				panic(fmt.Sprint("unexpected segment change,", s, segments[i+index]))
+			}
+		}
+
+		for _, s := range mergable {
+			s.removeOnFinalize()
+
+			if err != nil {
+				db.Unlock()
+				return err
+			}
+		}
+
+		newsegments := make([]segment, 0)
+
+		newsegments = append(newsegments, segments[:index]...)
+		newsegments = append(newsegments, newseg)
+		newsegments = append(newsegments, segments[index+len(mergable):]...)
+
+		db.segments = newsegments
+		index++
+		db.Unlock()
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func mergeSegments1(deleter Deleter, dbpath string, id uint64, mergeID uint64, segments []segment) (segment, error) {
+
+	base := filepath.Join(dbpath, "merged")
+
+	sid := strconv.FormatUint(id, 10)
+
+	smid := strconv.FormatUint(mergeID, 10)
+
+	keyFilename := base + "." + smid + ".keys." + sid
+	dataFilename := base + "." + smid + ".data." + sid
+
+	files := make([]string, 0)
+	for _, s := range segments {
+		files = append(files, s.files()...)
+	}
+	err := deleter.scheduleDeletion(filepath.Base(dataFilename), files)
+	if err != nil {
+		return nil, err
+	}
+
+	ms := newMultiSegment(segments)
+	itr, err := ms.Lookup(nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return writeAndLoadSegment(keyFilename, dataFilename, itr)
+}

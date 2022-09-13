@@ -13,21 +13,22 @@ import (
 // benchmark similar in scope to leveldb db_bench.cc, uses 16 byte keys and 100 byte values
 
 const nr = 1000000
+const vSize = 100
+const kSize = 16
 const batchSize = 1000
 
 var value []byte
 
 func main() {
 
-	value = make([]byte, 100)
+	value = make([]byte, vSize)
 	rand.Read(value)
 
 	runtime.GOMAXPROCS(4)
 
 	testWrite(false)
 	testBatch()
-	//	testWrite(true)
-
+	testWrite(true)
 	testRead()
 
 	db, err := leveldb.Open("test/mydb", leveldb.Options{})
@@ -47,14 +48,18 @@ func main() {
 func testWrite(sync bool) {
 	leveldb.Remove("test/mydb")
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}
 
 	start := time.Now()
+
 	for i := 0; i < nr; i++ {
-		err = db.Put([]byte(fmt.Sprintf("%07d.........", i)), value)
+		key := make([]byte, kSize)
+		keyS := []byte(fmt.Sprintf("%07d.........", i))
+		copy(key, keyS)
+		err = db.Put(key, value)
 		if err != nil {
 			panic(err)
 		}

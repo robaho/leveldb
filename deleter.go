@@ -56,8 +56,10 @@ func (d *dbDeleter) deleteScheduled() error {
 		if err != nil {
 			return err
 		}
+		d.file = nil
 	}
-	f, err := os.OpenFile(filepath.Join(d.path, "deleted"), os.O_RDONLY, 0)
+	filename := filepath.Join(d.path, "deleted")
+	f, err := os.OpenFile(filename, os.O_RDONLY, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -88,11 +90,9 @@ func (d *dbDeleter) deleteScheduled() error {
 	if err != nil {
 		return err
 	}
-	// create new deleted file
-	file, err := os.OpenFile(filepath.Join(d.path, "deleted"), os.O_APPEND|os.O_CREATE|os.O_SYNC|os.O_TRUNC, 0600)
+	err = os.Remove(filename)
 	if err != nil {
 		return err
 	}
-	d.file = file
 	return nil
 }

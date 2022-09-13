@@ -91,9 +91,10 @@ func loadDiskSegments(directory string) []segment {
 }
 
 func getSegmentID(filename string) uint64 {
-	index := strings.LastIndex(filename, ".")
+	base := filepath.Base(filename)
+	index := strings.LastIndex(base, ".")
 	if index >= 0 {
-		id, err := strconv.Atoi(filename[index+1:])
+		id, err := strconv.Atoi(base[index+1:])
 		if err == nil {
 			return uint64(id)
 		}
@@ -101,12 +102,13 @@ func getSegmentID(filename string) uint64 {
 	return 0
 }
 func getMergeID(filename string) uint64 {
-	if !strings.HasPrefix(filename, "merged.") {
+	base := filepath.Base(filename)
+	if !strings.HasPrefix(base, "merged.") {
 		return 0
 	}
-	index := strings.Index(filename, ".keys.")
+	index := strings.Index(base, ".keys.")
 	if index >= 0 {
-		id, err := strconv.Atoi(filename[7:index])
+		id, err := strconv.Atoi(base[7:index])
 		if err == nil {
 			return uint64(id)
 		}

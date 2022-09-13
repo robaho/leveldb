@@ -8,6 +8,7 @@ import (
 
 const kMaxHeight = 12
 
+// SkipList is lock-free for read and based on Google LevelDB implementation.
 type SkipList[K any] struct {
 	cmp_       func(K, K) int
 	head_      *node[K]

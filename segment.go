@@ -8,7 +8,8 @@ type segment interface {
 	Remove(key []byte) ([]byte, error)
 	Lookup(lower []byte, upper []byte) (LookupIterator, error)
 	Close() error
-	ID() uint64
+	LowerID() uint64
+	UpperID() uint64
 	removeSegment() error
 	removeOnFinalize()
 	files() []string

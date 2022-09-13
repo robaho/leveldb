@@ -14,11 +14,14 @@ import (
 	"strings"
 )
 
-// the key file uses 4096 byte blocks, the format is
-// keylen uint16
-// key []byte
-// dataoffset int64
-// datalen uint32 (if datalen is 0, the key is "removed"
+// diskSegment is a read-only immutable portion of the database.
+//
+// The key file uses 4096 byte blocks, the format is
+//
+//	keylen uint16
+//	key []byte
+//	dataoffset int64
+//	datalen uint32 (if datalen is 0, the key is "removed")
 //
 // keylen supports compressed keys. if the high bit is set, then the key is compressed,
 // with the 8 lower bits for the key len, and the next 7 bits for the run length. a block
@@ -29,12 +32,15 @@ import (
 // the data file can only be read in conjunction with the key
 // file since there is no length attribute, it is a raw appended
 // byte array with the offset and length in the key file
+//
+// The filenames are type.lower.upper, where type is 'keys' or 'data', and lower/upper is the
+// segment identifier range contained in the file
 type diskSegment struct {
 	keyFile   *memoryMappedFile
 	keyBlocks int64
 	dataFile  *memoryMappedFile
-	id        uint64
-	mergeId   uint64
+	lowerID   uint64
+	upperID   uint64
 	// nil for segments loaded during initial open
 	// otherwise holds the key for every keyIndexInterval block
 	keyIndex [][]byte
@@ -78,48 +84,57 @@ func loadDiskSegments(directory string) []segment {
 		if index < 0 {
 			continue
 		}
-		id := getSegmentID(file.Name())
-		base := file.Name()[:index]
-		keyFilename := filepath.Join(directory, base+"keys."+strconv.FormatUint(id, 10))
-		dataFilename := filepath.Join(directory, base+"data."+strconv.FormatUint(id, 10))
+		lowerId, upperId := getSegmentIDs(file.Name())
+		keyFilename := filepath.Join(directory, fmt.Sprintf("keys.%d.%d", lowerId, upperId))
+		dataFilename := filepath.Join(directory, fmt.Sprintf("data.%d.%d", lowerId, upperId))
 		segments = append(segments, newDiskSegment(keyFilename, dataFilename, nil)) // don't have keyIndex
 	}
 	sort.Slice(segments, func(i, j int) bool {
-		return segments[i].ID() < segments[j].ID()
+		return segments[i].UpperID() < segments[j].UpperID()
 	})
+	// remove any segments that are fully contained in another segment
+tryagain:
+	for i := 0; i < len(segments); i++ {
+		seg := segments[i]
+		for j := i + 1; j < len(segments); j++ {
+			seg0 := segments[j]
+			if seg.LowerID() >= seg0.LowerID() && seg.UpperID() <= seg0.UpperID() {
+				segments = segments[i+1:]
+				seg.removeSegment()
+				goto tryagain
+			}
+		}
+	}
 	return segments
 }
 
-func getSegmentID(filename string) uint64 {
+func getSegmentID(filename string) (id uint64) {
 	base := filepath.Base(filename)
-	index := strings.LastIndex(base, ".")
-	if index >= 0 {
-		id, err := strconv.Atoi(base[index+1:])
-		if err == nil {
-			return uint64(id)
-		}
+	segs := strings.Split(base, ".")
+	id0, err := strconv.Atoi(segs[1])
+	if err != nil {
+		panic(fmt.Sprint("invalid segment filename", base))
 	}
-	return 0
+	return uint64(id0)
 }
-func getMergeID(filename string) uint64 {
+
+func getSegmentIDs(filename string) (lower, upper uint64) {
 	base := filepath.Base(filename)
-	if !strings.HasPrefix(base, "merged.") {
-		return 0
+	segs := strings.Split(base, ".")
+	id0, err := strconv.Atoi(segs[1])
+	if err != nil {
+		panic(fmt.Sprint("invalid segment filename", base))
 	}
-	index := strings.Index(base, ".keys.")
-	if index >= 0 {
-		id, err := strconv.Atoi(base[7:index])
-		if err == nil {
-			return uint64(id)
-		}
+	id1, err := strconv.Atoi(segs[2])
+	if err != nil {
+		panic(fmt.Sprint("invalid segment filename", base))
 	}
-	return 0
+	return uint64(id0), uint64(id1)
 }
 
 func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment {
 
-	segmentID := getSegmentID(keyFilename)
-	mergeID := getMergeID(keyFilename)
+	lower, upper := getSegmentIDs(keyFilename)
 
 	ds := &diskSegment{}
 	kf, err := newMemoryMappedFile(keyFilename)
@@ -132,10 +147,10 @@ func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment
 	}
 	ds.keyFile = kf
 	ds.dataFile = df
+	ds.lowerID = lower
+	ds.upperID = upper
 
 	ds.keyBlocks = (kf.Length()-1)/keyBlockSize + 1
-	ds.id = segmentID
-	ds.mergeId = mergeID
 
 	if keyIndex == nil {
 		// TODO maybe load this in the background
@@ -269,8 +284,12 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 	}
 }
 
-func (ds *diskSegment) ID() uint64 {
-	return ds.id
+func (ds *diskSegment) LowerID() uint64 {
+	return ds.lowerID
+}
+
+func (ds *diskSegment) UpperID() uint64 {
+	return ds.upperID
 }
 
 func (ds *diskSegment) Put(key []byte, value []byte) ([]byte, error) {

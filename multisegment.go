@@ -76,8 +76,11 @@ func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 func newMultiSegment(segments []segment) *multiSegment {
 	return &multiSegment{segments: segments}
 }
-func (ms *multiSegment) ID() uint64 {
-	panic("MultiSegment does not have an ID")
+func (ms *multiSegment) LowerID() uint64 {
+	panic("MultiSegment does not have an LowerID")
+}
+func (ms *multiSegment) UpperID() uint64 {
+	panic("MultiSegment does not have an UpperID")
 }
 func (ms *multiSegment) Put(key []byte, value []byte) ([]byte, error) {
 	panic("Put called on multiSegment")

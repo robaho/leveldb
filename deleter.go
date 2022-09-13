@@ -2,7 +2,6 @@ package leveldb
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +9,7 @@ import (
 )
 
 type Deleter interface {
-	scheduleDeletion(ifExists string, filesToDelete []string) error
+	scheduleDeletion(filesToDelete []string) error
 	deleteScheduled() error
 }
 
@@ -22,7 +21,7 @@ type dbDeleter struct {
 type nullDeleter struct {
 }
 
-func (d *nullDeleter) scheduleDeletion(ifExists string, filesToDelete []string) error {
+func (d *nullDeleter) scheduleDeletion(filesToDelete []string) error {
 	return nil
 }
 func (d *nullDeleter) deleteScheduled() error {
@@ -38,7 +37,7 @@ func newDeleter(path string) Deleter {
 	}
 }
 
-func (d *dbDeleter) scheduleDeletion(ifExists string, filesToDelete []string) error {
+func (d *dbDeleter) scheduleDeletion(filesToDelete []string) error {
 	if d.file == nil {
 		file, err := os.OpenFile(filepath.Join(d.path, "deleted"), os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_SYNC, 0600)
 		if err != nil {
@@ -47,7 +46,7 @@ func (d *dbDeleter) scheduleDeletion(ifExists string, filesToDelete []string) er
 		d.file = file
 	}
 	//fmt.Printf("%s,%s\n", ifExists, strings.Join(filesToDelete, ","))
-	_, err := fmt.Fprintf(d.file, "%s,%s\n", ifExists, strings.Join(filesToDelete, ","))
+	_, err := fmt.Fprintf(d.file, "%s\n", strings.Join(filesToDelete, ","))
 	return err
 }
 func (d *dbDeleter) deleteScheduled() error {
@@ -71,18 +70,12 @@ func (d *dbDeleter) deleteScheduled() error {
 		line := s.Text()
 		//fmt.Println("deleted:", line)
 		files := strings.Split(line, ",")
-		path := filepath.Join(d.path, files[0])
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			// file does not exist
-		} else {
-			// file exists so delete the others
-			for _, file := range files[1:] {
-				path := filepath.Join(d.path, file)
-				err := os.Remove(path)
-				if err != nil && !os.IsNotExist(err) {
-					// ignore if the file has already been deleted
-					return err
-				}
+		for _, file := range files {
+			path := filepath.Join(d.path, file)
+			err := os.Remove(path)
+			if err != nil && !os.IsNotExist(err) {
+				// ignore if the file has already been deleted
+				return err
 			}
 		}
 	}

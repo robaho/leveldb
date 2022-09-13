@@ -34,10 +34,11 @@ func writeSegmentToDisk(db *Database, seg *memorySegment) error {
 		return errEmptySegment
 	}
 
-	id := seg.ID()
+	lowerId := seg.LowerID()
+	upperId := seg.LowerID()
 
-	keyFilename := filepath.Join(db.path, fmt.Sprint("keys.", id))
-	dataFilename := filepath.Join(db.path, fmt.Sprint("data.", id))
+	keyFilename := filepath.Join(db.path, fmt.Sprintf("keys.%d.%d", lowerId, upperId))
+	dataFilename := filepath.Join(db.path, fmt.Sprintf("data.%d.%d", lowerId, upperId))
 
 	_, err = writeAndLoadSegment(keyFilename, dataFilename, itr)
 	if err != nil && err != errEmptySegment {

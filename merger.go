@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"time"
 )
 
@@ -77,10 +76,9 @@ func mergeSegments0(db *Database, segmentCount int) error {
 			continue
 		}
 
-		id := mergable[len(mergable)-1].ID()
 		segments = segments[index : index+len(mergable)]
 
-		newseg, err := mergeSegments1(db.deleter, db.path, id, db.nextMergeID(), segments)
+		newseg, err := mergeSegments1(db.deleter, db.path, segments)
 		if err != nil {
 			return err
 		}
@@ -116,24 +114,17 @@ func mergeSegments0(db *Database, segmentCount int) error {
 	}
 }
 
-func mergeSegments1(deleter Deleter, dbpath string, id uint64, mergeID uint64, segments []segment) (segment, error) {
+func mergeSegments1(deleter Deleter, dbpath string, segments []segment) (segment, error) {
 
-	base := filepath.Join(dbpath, "merged")
+	lowerId := segments[0].LowerID()
+	upperId := segments[len(segments)-1].UpperID()
 
-	sid := strconv.FormatUint(id, 10)
-
-	smid := strconv.FormatUint(mergeID, 10)
-
-	keyFilename := base + "." + smid + ".keys." + sid
-	dataFilename := base + "." + smid + ".data." + sid
+	keyFilename := filepath.Join(dbpath, fmt.Sprintf("keys.%d.%d", lowerId, upperId))
+	dataFilename := filepath.Join(dbpath, fmt.Sprintf("data.%d.%d", lowerId, upperId))
 
 	files := make([]string, 0)
 	for _, s := range segments {
 		files = append(files, s.files()...)
-	}
-	err := deleter.scheduleDeletion(filepath.Base(dataFilename), files)
-	if err != nil {
-		return nil, err
 	}
 
 	ms := newMultiSegment(segments)
@@ -142,5 +133,13 @@ func mergeSegments1(deleter Deleter, dbpath string, id uint64, mergeID uint64, s
 		return nil, err
 	}
 
-	return writeAndLoadSegment(keyFilename, dataFilename, itr)
+	seg, err := writeAndLoadSegment(keyFilename, dataFilename, itr)
+	if err != nil {
+		return nil, err
+	}
+	err = deleter.scheduleDeletion(files)
+	if err != nil {
+		return nil, err
+	}
+	return seg, nil
 }

@@ -5,9 +5,8 @@ import (
 	"runtime"
 )
 
-// memorySegment wraps an im-memory skip list, so the number of items that can be inserted or removed
-// in a transaction is limited by available memory. The skip list uses a nil Value to designate a key that
-// has been removed from the table
+// memorySegment wraps an im-memory skip list and is backed by a sequential access log file.
+// The list uses a nil Value to designate a key that has been removed from the table.
 type memorySegment struct {
 	list    SkipList[KeyValue]
 	log     *logFile
@@ -32,7 +31,11 @@ func newMemoryOnlySegment() *memorySegment {
 	return newMemorySegment("", 0, Options{})
 }
 
-func (ms *memorySegment) ID() uint64 {
+func (ms *memorySegment) LowerID() uint64 {
+	return ms.id
+}
+
+func (ms *memorySegment) UpperID() uint64 {
 	return ms.id
 }
 
@@ -141,7 +144,9 @@ func (ms *memorySegment) removeSegment() error {
 }
 
 func (ms *memorySegment) removeOnFinalize() {
-	runtime.SetFinalizer(ms, func(ms *memorySegment) { ms.removeSegment() })
+	runtime.SetFinalizer(ms, func(ms *memorySegment) {
+		ms.removeSegment()
+	})
 }
 
 func (ms *memorySegment) files() []string {

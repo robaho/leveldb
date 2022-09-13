@@ -27,7 +27,10 @@ func newLogSegment(path string) (segment, error) {
 	return ls, nil
 }
 
-func (ls *logSegment) ID() uint64 {
+func (ls *logSegment) LowerID() uint64 {
+	return ls.id
+}
+func (ls *logSegment) UpperID() uint64 {
 	return ls.id
 }
 

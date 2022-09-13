@@ -17,19 +17,18 @@ const dbMaxSegments = 8
 // Database reference is obtained via Open()
 type Database struct {
 	sync.Mutex
-	segments    []segment
-	memory      *memorySegment
-	multi       segment
-	open        bool
-	closing     bool
-	merger      chan bool
-	deleter     Deleter
-	path        string
-	wg          sync.WaitGroup
-	nextSegID   uint64
-	nextMergeId uint64
-	lockfile    lockfile.Lockfile
-	options     Options
+	segments  []segment
+	memory    *memorySegment
+	multi     segment
+	open      bool
+	closing   bool
+	merger    chan bool
+	deleter   Deleter
+	path      string
+	wg        sync.WaitGroup
+	nextSegID uint64
+	lockfile  lockfile.Lockfile
+	options   Options
 
 	// if non-nil an asynchronous error has occurred, and the database cannot be used
 	err error
@@ -106,21 +105,12 @@ func open(path string, options Options) (*Database, error) {
 
 	db.segments = loadDiskSegments(path)
 	maxSegID := uint64(0)
-	maxMergeID := uint64(0)
 	for _, seg := range db.segments {
-		ds, ok := seg.(*diskSegment)
-
-		if seg.ID() > maxSegID {
-			maxSegID = seg.ID()
-		}
-		if ok {
-			if ds.mergeId > maxMergeID {
-				maxMergeID = ds.mergeId
-			}
+		if seg.UpperID() > maxSegID {
+			maxSegID = seg.UpperID()
 		}
 	}
 	atomic.StoreUint64(&db.nextSegID, uint64(maxSegID))
-	atomic.StoreUint64(&db.nextMergeId, uint64(maxMergeID))
 	db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
 	db.multi = newMultiSegment(append(db.segments, db.memory))
 	db.merger = make(chan bool)
@@ -286,10 +276,6 @@ finish:
 
 func (db *Database) nextSegmentID() uint64 {
 	return atomic.AddUint64(&db.nextSegID, 1)
-}
-
-func (db *Database) nextMergeID() uint64 {
-	return atomic.AddUint64(&db.nextMergeId, 1)
 }
 
 func less(a []byte, b []byte) bool {

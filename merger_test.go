@@ -18,7 +18,7 @@ func TestMerger(t *testing.T) {
 		m2.Put([]byte(fmt.Sprint("mykey", i)), []byte(fmt.Sprint("myvalue", i)))
 	}
 
-	merged, err := mergeSegments1(newNullDeleter(), "test", 0, 0, []segment{m1, m2})
+	merged, err := mergeSegments1(newNullDeleter(), "test", []segment{m1, m2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestMergerRemove(t *testing.T) {
 		m2.Remove([]byte(fmt.Sprint("mykey", i)))
 	}
 
-	merged, err := mergeSegments1(newNullDeleter(), "test", 0, 0, []segment{m1, m2})
+	merged, err := mergeSegments1(newNullDeleter(), "test", []segment{m1, m2})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,7 +48,7 @@ func main() {
 func testWrite(sync bool) {
 	leveldb.Remove("test/mydb")
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync, MaxSegments: 16})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}

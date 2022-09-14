@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -62,12 +61,47 @@ type diskSegmentIterator struct {
 
 var errKeyRemoved = errors.New("key removed")
 
-func loadDiskSegments(directory string) []segment {
-	files, err := ioutil.ReadDir(directory)
+func loadDiskSegments(directory string) ([]segment, error) {
+	files, err := os.ReadDir(directory)
 	if err != nil {
-		return []segment{}
+		return nil, err
 	}
 	segments := []segment{}
+	// first remove any 'tmp' files and related non-temp files as this signifies
+	// a failure during write
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".tmp") {
+			continue
+		}
+		base := strings.TrimSuffix(file.Name(), ".tmp")
+		var segs string
+		if strings.HasPrefix(base, "keys.") {
+			segs = strings.TrimPrefix(base, "keys.")
+		} else {
+			segs = strings.TrimPrefix(base, "data.")
+		}
+		removeFileIfExists := func(filename string) error {
+			err := os.Remove(filename)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		}
+		err0 := removeFileIfExists(fmt.Sprint("keys.", segs))
+		err1 := removeFileIfExists(fmt.Sprint("data.", segs))
+		err2 := removeFileIfExists(fmt.Sprint("keys.", segs, ".tmp"))
+		err3 := removeFileIfExists(fmt.Sprint("data.", segs, ".tmp"))
+		err = errn(err0, err1, err2, err3)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// re-read as temporary files should be removed
+	files, err = os.ReadDir(directory)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, file := range files {
 		if strings.HasPrefix(file.Name(), "log.") {
 			ls, err := newLogSegment(filepath.Join(directory, file.Name()))
@@ -76,9 +110,6 @@ func loadDiskSegments(directory string) []segment {
 			}
 			segments = append(segments, ls)
 			continue
-		}
-		if strings.HasSuffix(file.Name(), ".tmp") {
-			panic("tmp files in " + directory)
 		}
 		index := strings.Index(file.Name(), "keys.")
 		if index < 0 {
@@ -90,7 +121,13 @@ func loadDiskSegments(directory string) []segment {
 		segments = append(segments, newDiskSegment(keyFilename, dataFilename, nil)) // don't have keyIndex
 	}
 	sort.Slice(segments, func(i, j int) bool {
-		return segments[i].UpperID() < segments[j].UpperID()
+		id1, id2 := segments[i].UpperID(), segments[j].UpperID()
+		if id1 == id2 {
+			// the only way this is possible is if we have a log file that has already been merged, but
+			// wasn't deleted, so sort the log file first
+			return segments[i].LowerID() > segments[j].LowerID()
+		}
+		return id1 < id2
 	})
 	// remove any segments that are fully contained in another segment
 tryagain:
@@ -105,7 +142,7 @@ tryagain:
 			}
 		}
 	}
-	return segments
+	return segments, nil
 }
 
 func getSegmentID(filename string) (id uint64) {

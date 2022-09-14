@@ -103,7 +103,11 @@ func open(path string, options Options) (*Database, error) {
 		return nil, err
 	}
 
-	db.segments = loadDiskSegments(path)
+	db.segments, err = loadDiskSegments(path)
+	if err != nil {
+		return nil, err
+	}
+
 	maxSegID := uint64(0)
 	for _, seg := range db.segments {
 		if seg.UpperID() > maxSegID {

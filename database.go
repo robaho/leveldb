@@ -17,12 +17,14 @@ const dbMaxSegments = 8
 // Database reference is obtained via Open()
 type Database struct {
 	sync.Mutex
-	segments  []segment
-	memory    *memorySegment
-	multi     segment
-	open      bool
-	closing   bool
-	merger    chan bool
+	segments []segment
+	memory   *memorySegment
+	multi    segment
+	open     bool
+	closing  bool
+	merger   chan bool
+	// atomically updated flag to control merger
+	inMerge   int32
 	deleter   Deleter
 	path      string
 	wg        sync.WaitGroup
@@ -37,9 +39,12 @@ type Database struct {
 type Options struct {
 	CreateIfNeeded bool
 	DisableBgMerge bool
-	// Maximum number of segments per database. Controls the number of open files.
+	// Maximum number of segments per database which controls the number of open files.
+	// If the number of segments exceeds 2x this value, producers are paused while the
+	// segments are merged.
 	MaxSegments int
-	// Maximum size of memory segment in bytes.
+	// Maximum size of memory segment in bytes. Maximum memory usage per database is
+	// roughly MaxSegments * MaxMemoryBytes but can be higher based on producer rate.
 	MaxMemoryBytes int
 	// Disable flush to disk when writing to increase performance.
 	DisableWriteFlush bool

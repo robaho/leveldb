@@ -48,7 +48,7 @@ func main() {
 func testWrite(sync bool) {
 	leveldb.Remove("test/mydb")
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync, MaxSegments: 16})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync, MaxSegments: 64})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}
@@ -90,7 +90,7 @@ func testWrite(sync bool) {
 func testBatch() {
 	leveldb.Remove("test/mydb")
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true})
+	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, MaxSegments: 64})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}

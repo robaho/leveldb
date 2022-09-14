@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,17 +30,25 @@ func mergeSegments(db *Database) {
 		db.wg.Add(1)
 
 		err := mergeSegments0(db, db.options.MaxSegments)
+		db.Lock()
 		if err != nil {
-			db.Lock()
 			db.err = errors.New("unable to merge segments: " + err.Error())
-			db.Unlock()
 		}
+		db.Unlock()
 
 		db.wg.Done()
 	}
 }
 
 func mergeSegments0(db *Database, segmentCount int) error {
+	// only a single routine can be in mergeSegments0 to avoid deadlock
+	if !atomic.CompareAndSwapInt32(&db.inMerge, 0, 1) {
+		return nil
+	}
+	defer atomic.StoreInt32(&db.inMerge, 0)
+
+	fmt.Println("merging segments", db.path)
+
 	var index = 0
 
 	for {

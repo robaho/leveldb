@@ -40,6 +40,7 @@ func (db *Database) Get(key []byte) (value []byte, err error) {
 // Put a key/value pair into the table, overwriting any existing entry. empty keys are not supported.
 func (db *Database) Put(key []byte, value []byte) error {
 	db.Lock()
+	defer db.maybeMerge()
 	defer db.Unlock()
 
 	if !db.open {
@@ -61,6 +62,7 @@ func (db *Database) Put(key []byte, value []byte) error {
 // Remove a key and its value from the table. empty keys are not supported.
 func (db *Database) Remove(key []byte) ([]byte, error) {
 	db.Lock()
+	defer db.maybeMerge()
 	defer db.Unlock()
 
 	if !db.open {
@@ -96,6 +98,7 @@ func (db *Database) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 
 func (db *Database) Write(wb WriteBatch) error {
 	db.Lock()
+	defer db.maybeMerge()
 	defer db.Unlock()
 
 	if !db.open {
@@ -112,5 +115,11 @@ func (db *Database) maybeSwapMemory() {
 		db.segments = append(db.segments, db.memory)
 		db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
 		db.multi = newMultiSegment(append(db.segments, db.memory))
+	}
+}
+
+func (db *Database) maybeMerge() {
+	if len(db.segments) > 2*db.options.MaxSegments {
+		mergeSegments0(db, db.options.MaxSegments)
 	}
 }

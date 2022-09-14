@@ -47,7 +47,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 	}
 	defer atomic.StoreInt32(&db.inMerge, 0)
 
-	fmt.Println("merging segments", db.path)
+	//fmt.Println("merging segments", db.path)
 
 	var index = 0
 

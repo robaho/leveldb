@@ -37,6 +37,14 @@ type Database struct {
 	err error
 }
 
+type batchReadMode int
+
+const (
+	DiscardPartial batchReadMode = 0
+	ApplyPartial
+	ReturnOpenError
+)
+
 type Options struct {
 	CreateIfNeeded bool
 	DisableBgMerge bool
@@ -51,6 +59,8 @@ type Options struct {
 	DisableWriteFlush bool
 	// Force sync to disk when writing. If true, then DisableWriteFlush is ignored.
 	EnableSyncWrite bool
+	// Determines handling of partial batches during Open()
+	BatchReadMode batchReadMode
 }
 
 // LookupIterator iterator interface for table scanning. all iterators should be read until completion
@@ -99,7 +109,7 @@ func open(path string, options Options) (*Database, error) {
 		return nil, DatabaseInUse
 	}
 
-	db := &Database{path: path, open: true}
+	db := &Database{path: path, open: true, options: options}
 	db.lockfile = lf
 
 	db.deleter = newDeleter(path)
@@ -109,7 +119,7 @@ func open(path string, options Options) (*Database, error) {
 		return nil, err
 	}
 
-	db.segments, err = loadDiskSegments(path)
+	db.segments, err = loadDiskSegments(path, db.options)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +134,6 @@ func open(path string, options Options) (*Database, error) {
 	db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
 	db.multi = newMultiSegment(copyAndAppend(db.segments, db.memory))
 	db.merger = make(chan bool)
-	db.options = options
 
 	if db.options.MaxMemoryBytes < dbMemorySegment {
 		db.options.MaxMemoryBytes = dbMemorySegment

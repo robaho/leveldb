@@ -13,10 +13,10 @@ type logSegment struct {
 	path string
 }
 
-func newLogSegment(path string) (segment, error) {
+func newLogSegment(path string, options Options) (segment, error) {
 	ls := new(logSegment)
 
-	list, err := readLogFile(path)
+	list, err := readLogFile(path, options)
 	if err != nil {
 		return nil, err
 	}

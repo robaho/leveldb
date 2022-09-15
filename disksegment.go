@@ -61,7 +61,7 @@ type diskSegmentIterator struct {
 
 var errKeyRemoved = errors.New("key removed")
 
-func loadDiskSegments(directory string) ([]segment, error) {
+func loadDiskSegments(directory string, options Options) ([]segment, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func loadDiskSegments(directory string) ([]segment, error) {
 
 	for _, file := range files {
 		if strings.HasPrefix(file.Name(), "log.") {
-			ls, err := newLogSegment(filepath.Join(directory, file.Name()))
+			ls, err := newLogSegment(filepath.Join(directory, file.Name()), options)
 			if err != nil {
 				panic(fmt.Sprint("unable to load logSegment", file, err))
 			}

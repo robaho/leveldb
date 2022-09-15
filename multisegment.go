@@ -73,6 +73,7 @@ func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 	return
 }
 
+// Creates a new multiSegment. The passed segments should no longer be referenced.
 func newMultiSegment(segments []segment) *multiSegment {
 	return &multiSegment{segments: segments}
 }

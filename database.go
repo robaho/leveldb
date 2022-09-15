@@ -21,8 +21,9 @@ type Database struct {
 	memory   *memorySegment
 	multi    segment
 	open     bool
-	closing  bool
-	merger   chan bool
+	// atomically updated flag to control database closing
+	closing int32
+	merger  chan bool
 	// atomically updated flag to control merger
 	inMerge   int32
 	deleter   Deleter
@@ -32,7 +33,7 @@ type Database struct {
 	lockfile  lockfile.Lockfile
 	options   Options
 
-	// if non-nil an asynchronous error has occurred, and the database cannot be used
+	// if non-nil an asynchronous error has occurred, and the database cannot be used. must be atomically updated
 	err error
 }
 
@@ -121,7 +122,7 @@ func open(path string, options Options) (*Database, error) {
 	}
 	atomic.StoreUint64(&db.nextSegID, uint64(maxSegID))
 	db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
-	db.multi = newMultiSegment(append(db.segments, db.memory))
+	db.multi = newMultiSegment(copyAndAppend(db.segments, db.memory))
 	db.merger = make(chan bool)
 	db.options = options
 
@@ -233,13 +234,13 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 		goto finish
 	}
 
-	db.closing = true
+	atomic.StoreInt32(&db.closing, 1)
 	close(db.merger)
 
 	db.wg.Wait() // wait for background merger to exit
 
 	db.Lock()
-	db.segments = append(db.segments, db.memory)
+	db.segments = copyAndAppend(db.segments, db.memory)
 	db.memory = nil
 	db.Unlock()
 
@@ -287,9 +288,28 @@ func (db *Database) nextSegmentID() uint64 {
 	return atomic.AddUint64(&db.nextSegID, 1)
 }
 
+// Atomically load the segment slice
+func (db *Database) getSegments() []segment {
+	db.Lock()
+	defer db.Unlock()
+	return db.segments
+}
+
+// Atomically load the current multiSegment
+func (db *Database) getMulti() segment {
+	db.Lock()
+	defer db.Unlock()
+	return db.multi
+}
+
 func less(a []byte, b []byte) bool {
 	return bytes.Compare(a, b) < 0
 }
 func equal(a []byte, b []byte) bool {
 	return bytes.Equal(a, b)
+}
+func copyAndAppend(seg []segment, segs ...segment) []segment {
+	newSlice := make([]segment, len(seg), len(seg)+len(segs))
+	copy(newSlice, seg)
+	return append(newSlice, segs...)
 }

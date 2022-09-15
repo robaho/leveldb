@@ -27,7 +27,7 @@ func (db *Database) Get(key []byte) (value []byte, err error) {
 	if len(key) > 1024 {
 		return nil, KeyTooLong
 	}
-	value, err = db.multi.Get(key)
+	value, err = db.getMulti().Get(key)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (db *Database) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	if !db.open {
 		return nil, DatabaseClosed
 	}
-	itr, err := db.multi.Lookup(lower, upper)
+	itr, err := db.getMulti().Lookup(lower, upper)
 	if err != nil {
 		return nil, err
 	}
@@ -112,14 +112,14 @@ func (db *Database) Write(wb WriteBatch) error {
 
 func (db *Database) maybeSwapMemory() {
 	if db.memory.bytes > db.options.MaxMemoryBytes {
-		db.segments = append(db.segments, db.memory)
+		db.segments = copyAndAppend(db.segments, db.memory)
 		db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
-		db.multi = newMultiSegment(append(db.segments, db.memory))
+		db.multi = newMultiSegment(copyAndAppend(db.segments, db.memory))
 	}
 }
 
 func (db *Database) maybeMerge() {
-	if len(db.segments) > 2*db.options.MaxSegments {
+	if len(db.getSegments()) > 2*db.options.MaxSegments {
 		mergeSegments0(db, db.options.MaxSegments)
 	}
 }

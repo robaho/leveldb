@@ -1,14 +1,17 @@
 package leveldb_test
 
 import (
+	"fmt"
 	"github.com/robaho/leveldb"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 )
 
-func TestConcurrentWriter(t *testing.T) {
+// Test using multiple writers and readers.
+func TestConcurrency(t *testing.T) {
 	leveldb.Remove("test/mydb")
 
 	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true})
@@ -20,9 +23,9 @@ func TestConcurrentWriter(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	f := func(prefix string) {
+	writer := func(prefix string) {
 		for i := 0; i < nrecs; i++ {
-			err = db.Put([]byte(prefix+strconv.Itoa(i)), []byte("myvalue"+strconv.Itoa(i)))
+			err := db.Put([]byte(prefix+strconv.Itoa(i)), []byte("myvalue"+strconv.Itoa(i)))
 			if err != nil {
 				t.Fatal("unable to put key/Value", err)
 			}
@@ -30,10 +33,24 @@ func TestConcurrentWriter(t *testing.T) {
 		wg.Done()
 	}
 
-	wg.Add(2)
+	reader := func(prefix string) {
+		for i := 0; i < nrecs; i++ {
+			j := rand.Intn(nrecs)
+			_, err := db.Get([]byte(prefix + strconv.Itoa(j)))
+			if err != nil && err != leveldb.KeyNotFound {
+				t.Fatal("unable to get key/Value", err)
+			}
+		}
+		fmt.Print("reader done\n")
+		wg.Done()
+	}
 
-	go f("writera")
-	go f("writerb")
+	wg.Add(4)
+
+	go writer("prefixa")
+	go writer("prefixb")
+	go reader("prefixa")
+	go reader("prefixb")
 
 	wg.Wait()
 
@@ -50,7 +67,7 @@ func TestConcurrentWriter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.HasPrefix(string(key), "writera") && !strings.HasPrefix(string(key), "writerb") {
+		if !strings.HasPrefix(string(key), "prefixa") && !strings.HasPrefix(string(key), "prefixb") {
 			t.Fatal("incorrect key", string(key))
 		}
 		if !strings.HasPrefix(string(value), "myvalue") {
@@ -62,7 +79,7 @@ func TestConcurrentWriter(t *testing.T) {
 		t.Fatal("incorrect record count, expected", nrecs*2, "received", count)
 	}
 
-	err = db.CloseWithMerge(1)
+	err = db.Close()
 	if err != nil {
 		t.Fatal("unable to close database", err)
 	}

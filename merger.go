@@ -20,7 +20,7 @@ func mergeSegments(db *Database) {
 		case <-db.merger:
 			break
 		}
-		if db.closing || db.err != nil {
+		if atomic.LoadInt32(&db.closing) > 0 || db.err != nil {
 			return
 		}
 
@@ -53,9 +53,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 
 	for {
 
-		db.Lock()
-		segments := db.segments
-		db.Unlock()
+		segments := db.getSegments()
 
 		if len(segments) <= segmentCount {
 			return nil

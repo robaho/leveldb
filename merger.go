@@ -53,7 +53,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 
 	for {
 
-		segments := db.getSegments()
+		segments := db.getState().segments
 
 		if len(segments) <= segmentCount {
 			return nil
@@ -91,7 +91,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 		}
 
 		db.Lock() // need lock when updating db segments
-		segments = db.segments
+		segments = db.state.segments
 
 		for i, s := range mergable {
 			if s != segments[i+index] {
@@ -114,7 +114,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 		newsegments = append(newsegments, newseg)
 		newsegments = append(newsegments, segments[index+len(mergable):]...)
 
-		db.segments = newsegments
+		db.setState(&dbState{segments: newsegments, memory: db.state.memory, multi: newMultiSegment(copyAndAppend(newsegments, db.state.memory))})
 		index++
 		db.Unlock()
 		time.Sleep(100 * time.Millisecond)

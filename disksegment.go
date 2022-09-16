@@ -32,8 +32,9 @@ import (
 // file since there is no length attribute, it is a raw appended
 // byte array with the offset and length in the key file
 //
-// The filenames are type.lower.upper, where type is 'keys' or 'data', and lower/upper is the
-// segment identifier range contained in the file
+// The filenames are prefix.lower.upper, where prefix is 'keys' or 'data', and lower/upper is the
+// segment identifier range contained in the file. Invalid filenames in the database will cause
+// a panic on open.
 type diskSegment struct {
 	keyFile   *memoryMappedFile
 	keyBlocks int64

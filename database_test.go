@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var options = leveldb.Options{CreateIfNeeded: true, DisableBgMerge: true}
+var options = leveldb.Options{CreateIfNeeded: true, DisableAutoMerge: true}
 
 func TestDatabase(t *testing.T) {
 	leveldb.Remove("test/mydb")

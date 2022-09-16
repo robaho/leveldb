@@ -92,59 +92,68 @@ func readLogFile(path string, options Options) (*SkipList[KeyValue], error) {
 	r := bufio.NewReader(f)
 	list := NewSkipList(KeyValueCompare)
 
+	var len, kLen, vLen int32
+
+	readBatch := func(len int32) error {
+		var err error
+		var len0 int32
+		entries := make([]KeyValue, 0)
+		// start of batch
+		for i := 0; i < int(len*-1); i++ {
+			err = binary.Read(r, binary.LittleEndian, &kLen)
+			if err != nil {
+				goto batchReadError
+			}
+			key := make([]byte, kLen)
+			err = binary.Read(r, binary.LittleEndian, &key)
+			if err != nil {
+				goto batchReadError
+			}
+			err = binary.Read(r, binary.LittleEndian, &vLen)
+			if err != nil {
+				goto batchReadError
+			}
+			value := make([]byte, vLen)
+			err = binary.Read(r, binary.LittleEndian, &value)
+			if err != nil {
+				goto batchReadError
+			}
+			entries = append(entries, KeyValue{key: key, value: value})
+		}
+		// read end of batch marker
+		err = binary.Read(r, binary.LittleEndian, &len0)
+		if err != nil {
+			goto batchReadError
+		}
+		if len0 != len {
+			err = DatabaseCorrupted
+			goto batchReadError
+		}
+	batchReadError:
+		if options.BatchReadMode == ApplyPartial || err == nil {
+			for _, e := range entries {
+				list.Put(e)
+			}
+		}
+		return err
+	}
+
 	for {
-		var len int32
-		var kLen, vLen int32
 		err := binary.Read(r, binary.LittleEndian, &len)
 		if err == io.EOF {
 			return &list, nil
 		}
-		if len < 0 {
-			var err error
-			var len0 int32
-			entries := make([]KeyValue, 0)
-			// start of batch
-			for i := 0; i < int(len*-1); i++ {
-				err = binary.Read(r, binary.LittleEndian, &kLen)
-				if err != nil {
-					goto batchReadError
-				}
-				key := make([]byte, kLen)
-				err = binary.Read(r, binary.LittleEndian, &key)
-				if err != nil {
-					goto batchReadError
-				}
-				err = binary.Read(r, binary.LittleEndian, &vLen)
-				if err != nil {
-					goto batchReadError
-				}
-				value := make([]byte, vLen)
-				err = binary.Read(r, binary.LittleEndian, &value)
-				if err != nil {
-					goto batchReadError
-				}
-				list.Put(KeyValue{key: key, value: value})
-			}
-			// read end of batch marker
-			err = binary.Read(r, binary.LittleEndian, &len0)
-			if err != nil {
-				goto batchReadError
-			}
-			if len0 != len {
-				err = DatabaseCorrupted
-				goto batchReadError
-			}
-		batchReadError:
-			if options.BatchReadMode == DiscardPartial {
-				return &list, nil
-			}
-			if options.BatchReadMode == ApplyPartial {
-				for _, e := range entries {
-					list.Put(e)
-				}
-				return &list, nil
-			}
+		if err != nil {
 			return nil, err
+		}
+		if len < 0 {
+			err = readBatch(len)
+			if err != nil {
+				if options.BatchReadMode == ReturnOpenError {
+					return nil, err
+				}
+				return &list, nil
+			}
 		} else {
 			kLen = len
 			key := make([]byte, kLen)

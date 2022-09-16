@@ -9,18 +9,22 @@ import (
 	"regexp"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 const dbMemorySegment = 1024 * 1024
 const dbMaxSegments = 8
 
-// Database reference is obtained via Open()
-type Database struct {
-	sync.Mutex
+type dbState struct {
 	segments []segment
 	memory   *memorySegment
 	multi    segment
-	open     bool
+}
+
+// Database reference is obtained via Open()
+type Database struct {
+	sync.Mutex
+	open bool
 	// atomically updated flag to control database closing
 	closing int32
 	merger  chan bool
@@ -32,6 +36,8 @@ type Database struct {
 	nextSegID uint64
 	lockfile  lockfile.Lockfile
 	options   Options
+	// atomic CAS to avoid contention, db.state is read-only
+	state *dbState
 
 	// if non-nil an asynchronous error has occurred, and the database cannot be used. must be atomically updated
 	err error
@@ -40,14 +46,17 @@ type Database struct {
 type batchReadMode int
 
 const (
-	DiscardPartial batchReadMode = 0
-	ApplyPartial
-	ReturnOpenError
+	DiscardPartial  batchReadMode = 0
+	ApplyPartial    batchReadMode = 1
+	ReturnOpenError batchReadMode = 2
 )
 
 type Options struct {
+	// If true, then if the database does not exist on Open() it will be created.
 	CreateIfNeeded bool
-	DisableBgMerge bool
+	// The database segments are periodically merged to enforce MaxSegments.
+	// If this is true, the merging only occurs during Close().
+	DisableAutoMerge bool
 	// Maximum number of segments per database which controls the number of open files.
 	// If the number of segments exceeds 2x this value, producers are paused while the
 	// segments are merged.
@@ -119,20 +128,26 @@ func open(path string, options Options) (*Database, error) {
 		return nil, err
 	}
 
-	db.segments, err = loadDiskSegments(path, db.options)
+	segments, err := loadDiskSegments(path, db.options)
 	if err != nil {
 		return nil, err
 	}
 
 	maxSegID := uint64(0)
-	for _, seg := range db.segments {
+	for _, seg := range segments {
 		if seg.UpperID() > maxSegID {
 			maxSegID = seg.UpperID()
 		}
 	}
 	atomic.StoreUint64(&db.nextSegID, uint64(maxSegID))
-	db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
-	db.multi = newMultiSegment(copyAndAppend(db.segments, db.memory))
+
+	memory := newMemorySegment(db.path, db.nextSegmentID(), db.options)
+	multi := newMultiSegment(copyAndAppend(segments, memory))
+
+	state := &dbState{segments: segments, memory: memory, multi: multi}
+
+	db.setState(state)
+
 	db.merger = make(chan bool)
 
 	if db.options.MaxMemoryBytes < dbMemorySegment {
@@ -142,7 +157,7 @@ func open(path string, options Options) (*Database, error) {
 		db.options.MaxSegments = dbMaxSegments
 	}
 
-	if !options.DisableBgMerge {
+	if !options.DisableAutoMerge {
 		db.wg.Add(1)
 		go mergeSegments(db)
 	}
@@ -239,6 +254,8 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 	}
 	err := db.err
 
+	var state *dbState
+
 	if err != nil {
 		goto finish
 	}
@@ -248,10 +265,13 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 
 	db.wg.Wait() // wait for background merger to exit
 
-	db.Lock()
-	db.segments = copyAndAppend(db.segments, db.memory)
-	db.memory = nil
-	db.Unlock()
+	state = &dbState{
+		segments: copyAndAppend(db.state.segments, db.state.memory),
+		memory:   nil,
+		multi:    nil,
+	}
+
+	db.state = state
 
 	if segmentCount > 0 {
 		db.err = mergeSegments0(db, segmentCount)
@@ -263,7 +283,7 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 
 	// write any remaining memory segments to disk
 	db.Lock()
-	for _, s := range db.segments {
+	for _, s := range db.state.segments {
 		ms, ok := s.(*memorySegment)
 		if ok {
 			db.wg.Add(1)
@@ -279,14 +299,14 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 
 	db.wg.Wait()
 
-	for _, s := range db.segments {
+	for _, s := range db.state.segments {
 		s.Close()
 	}
 
 	err = db.deleter.deleteScheduled()
 
 finish:
-	db.segments = []segment{}
+	db.state = &dbState{segments: []segment{}}
 	db.lockfile.Unlock()
 	db.open = false
 
@@ -297,18 +317,11 @@ func (db *Database) nextSegmentID() uint64 {
 	return atomic.AddUint64(&db.nextSegID, 1)
 }
 
-// Atomically load the segment slice
-func (db *Database) getSegments() []segment {
-	db.Lock()
-	defer db.Unlock()
-	return db.segments
+func (db *Database) getState() *dbState {
+	return (*dbState)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&db.state))))
 }
-
-// Atomically load the current multiSegment
-func (db *Database) getMulti() segment {
-	db.Lock()
-	defer db.Unlock()
-	return db.multi
+func (db *Database) setState(state *dbState) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&db.state)), unsafe.Pointer(state))
 }
 
 func less(a []byte, b []byte) bool {

@@ -27,7 +27,7 @@ func (db *Database) Get(key []byte) (value []byte, err error) {
 	if len(key) > 1024 {
 		return nil, KeyTooLong
 	}
-	value, err = db.getMulti().Get(key)
+	value, err = db.getState().multi.Get(key)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (db *Database) Put(key []byte, value []byte) error {
 
 	db.maybeSwapMemory()
 
-	_, err := db.memory.Put(key, value)
+	_, err := db.state.memory.Put(key, value)
 	return err
 }
 
@@ -77,8 +77,7 @@ func (db *Database) Remove(key []byte) ([]byte, error) {
 	}
 
 	db.maybeSwapMemory()
-
-	db.memory.Remove(key)
+	db.state.memory.Remove(key)
 	return value, nil
 }
 
@@ -89,7 +88,7 @@ func (db *Database) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	if !db.open {
 		return nil, DatabaseClosed
 	}
-	itr, err := db.getMulti().Lookup(lower, upper)
+	itr, err := db.getState().multi.Lookup(lower, upper)
 	if err != nil {
 		return nil, err
 	}
@@ -107,19 +106,25 @@ func (db *Database) Write(wb WriteBatch) error {
 
 	db.maybeSwapMemory()
 
-	return db.memory.Write(wb)
+	return db.state.memory.Write(wb)
 }
 
 func (db *Database) maybeSwapMemory() {
-	if db.memory.bytes > db.options.MaxMemoryBytes {
-		db.segments = copyAndAppend(db.segments, db.memory)
-		db.memory = newMemorySegment(db.path, db.nextSegmentID(), db.options)
-		db.multi = newMultiSegment(copyAndAppend(db.segments, db.memory))
+	state := db.getState()
+	if state.memory.bytes > db.options.MaxMemoryBytes {
+		segments := copyAndAppend(state.segments, state.memory)
+		memory := newMemorySegment(db.path, db.nextSegmentID(), db.options)
+		multi := newMultiSegment(copyAndAppend(segments, memory))
+		db.setState(&dbState{segments: segments, memory: memory, multi: multi})
 	}
 }
 
 func (db *Database) maybeMerge() {
-	if len(db.getSegments()) > 2*db.options.MaxSegments {
+	if db.options.DisableAutoMerge {
+		return
+	}
+	state := db.getState()
+	if len(state.segments) > 2*db.options.MaxSegments {
 		mergeSegments0(db, db.options.MaxSegments)
 	}
 }

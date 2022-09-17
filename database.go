@@ -43,6 +43,8 @@ type Database struct {
 	err error
 }
 
+type KeyComparison func([]byte, []byte) int
+
 type batchReadMode int
 
 const (
@@ -70,6 +72,8 @@ type Options struct {
 	EnableSyncWrite bool
 	// Determines handling of partial batches during Open()
 	BatchReadMode batchReadMode
+	// Key comparison function or nil to use standard bytes.Compare
+	UserKeyCompare KeyComparison
 }
 
 // LookupIterator iterator interface for table scanning. all iterators should be read until completion

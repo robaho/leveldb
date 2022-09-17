@@ -18,7 +18,7 @@ type memorySegment struct {
 
 func newMemorySegment(path string, id uint64, options Options) *memorySegment {
 	ms := new(memorySegment)
-	ms.list = NewSkipList(KeyValueCompare)
+	ms.list = NewSkipList(keyValueCompare(options))
 	ms.id = id
 	ms.path = path
 	ms.options = options
@@ -121,7 +121,7 @@ func (ms *memorySegment) Lookup(lower []byte, upper []byte) (LookupIterator, err
 	} else {
 		itr.seekToFirst()
 	}
-	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper)}, nil
+	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: ms.list.cmp_}, nil
 }
 
 func (ms *memorySegment) Close() error {
@@ -161,6 +161,7 @@ type skiplistIterator struct {
 	itr   iterator[KeyValue]
 	lower KeyValue
 	upper KeyValue
+	cmp   func(KeyValue, KeyValue) int
 }
 
 func (es *skiplistIterator) Next() (key []byte, value []byte, err error) {
@@ -168,7 +169,7 @@ func (es *skiplistIterator) Next() (key []byte, value []byte, err error) {
 		return nil, nil, EndOfIterator
 	}
 	k := es.itr.key()
-	if es.upper.key != nil && KeyValueCompare(k, es.upper) > 0 {
+	if es.upper.key != nil && es.cmp(k, es.upper) > 0 {
 		return nil, nil, EndOfIterator
 	}
 	defer es.itr.next()
@@ -180,7 +181,7 @@ func (es *skiplistIterator) peekKey() ([]byte, error) {
 		return nil, EndOfIterator
 	}
 	k := es.itr.key()
-	if es.upper.key != nil && KeyValueCompare(k, es.upper) > 0 {
+	if es.upper.key != nil && es.cmp(k, es.upper) > 0 {
 		return nil, EndOfIterator
 	}
 	return k.key, nil

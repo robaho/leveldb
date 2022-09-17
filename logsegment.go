@@ -59,7 +59,7 @@ func (ls *logSegment) Lookup(lower []byte, upper []byte) (LookupIterator, error)
 	} else {
 		itr.seekToFirst()
 	}
-	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper)}, nil
+	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: ls.list.cmp_}, nil
 }
 
 func (ls *logSegment) Close() error {

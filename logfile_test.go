@@ -8,6 +8,13 @@ import (
 )
 
 func writeLogFile() error {
+	err := os.Remove("test/log.0")
+	if err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+
+	os.Mkdir("test", 0777)
+
 	lf, err := newLogFile("test", 0, Options{})
 	if err != nil {
 		return err

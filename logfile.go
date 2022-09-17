@@ -2,6 +2,7 @@ package leveldb
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -82,6 +83,18 @@ func (f *logFile) Remove() error {
 	return os.Remove(f.file.Name())
 }
 
+func keyValueCompare(options Options) func(a, b KeyValue) int {
+	if options.UserKeyCompare == nil {
+		return func(a, b KeyValue) int {
+			return bytes.Compare(a.key, b.key)
+		}
+	} else {
+		return func(a, b KeyValue) int {
+			return options.UserKeyCompare(a.key, b.key)
+		}
+	}
+}
+
 func readLogFile(path string, options Options) (*SkipList[KeyValue], error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
@@ -90,7 +103,8 @@ func readLogFile(path string, options Options) (*SkipList[KeyValue], error) {
 	defer f.Close()
 
 	r := bufio.NewReader(f)
-	list := NewSkipList(KeyValueCompare)
+
+	list := NewSkipList(keyValueCompare(options))
 
 	var len, kLen, vLen int32
 

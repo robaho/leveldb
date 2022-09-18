@@ -3,6 +3,7 @@ package leveldb
 import (
 	"bytes"
 	"errors"
+	"github.com/robaho/leveldb/skip"
 	"os"
 	"testing"
 )
@@ -46,8 +47,8 @@ func writeLogFile() error {
 	return nil
 }
 
-func testKeyValue(s *SkipList[KeyValue], key string, value string) error {
-	r, ok := s.get(KeyValue{key: []byte(key)})
+func testKeyValue(s *skip.SkipList[KeyValue], key string, value string) error {
+	r, ok := s.Get(KeyValue{key: []byte(key)})
 	if !ok {
 		return errors.New("key not found")
 	}

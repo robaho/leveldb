@@ -1,4 +1,4 @@
-package leveldb
+package skip
 
 import (
 	"math/rand"
@@ -8,7 +8,9 @@ import (
 
 const kMaxHeight = 12
 
-// SkipList is lock-free for read and based on Google LevelDB implementation.
+// SkipList is a high performance data structure based on the Google LevelDB implementation.
+// Mutating operations must be externally synchronized, but reads including
+// iteration are lock-free.
 type SkipList[K any] struct {
 	cmp_       func(K, K) int
 	head_      *node[K]
@@ -16,6 +18,7 @@ type SkipList[K any] struct {
 	random_    rand.Rand
 }
 
+// Put must be externally synchronized with Remove.
 func (s *SkipList[K]) Put(key K) K {
 	// TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
 	// here since Put() is externally synchronized.
@@ -71,16 +74,7 @@ func (s *SkipList[K]) randomHeight() int {
 	return height
 }
 
-func (s *SkipList[K]) contains(key K) bool {
-	x := s.findGreaterOrEqual(key, nil)
-	if x != nil && s.equal(key, x.key) {
-		return true
-	} else {
-		return false
-	}
-}
-
-func (s *SkipList[K]) get(key K) (K, bool) {
+func (s *SkipList[K]) Get(key K) (K, bool) {
 	x := s.findGreaterOrEqual(key, nil)
 	if x != nil && s.equal(key, x.key) {
 		return x.key, true
@@ -89,7 +83,9 @@ func (s *SkipList[K]) get(key K) (K, bool) {
 		return noop, false
 	}
 }
-func (s *SkipList[K]) remove(key K) (K, bool) {
+
+// Remove must be externally synchronized with Put.
+func (s *SkipList[K]) Remove(key K) (K, bool) {
 	x := s.findGreaterOrEqual(key, nil)
 	if x != nil && s.equal(key, x.key) {
 		prev := x.key
@@ -116,33 +112,33 @@ func (node_ *node[K]) setNext(n int, x *node[K]) {
 	atomic.StorePointer(p, unsafe.Pointer(x))
 }
 
-type iterator[K any] struct {
+type Iterator[K any] struct {
 	list_ *SkipList[K]
 	node_ *node[K]
 }
 
-func (i *iterator[K]) valid() bool {
+func (i *Iterator[K]) Valid() bool {
 	return i.node_ != nil
 }
 
-func (i *iterator[K]) next() {
+func (i *Iterator[K]) Next() {
 	i.node_ = i.node_.next(0)
 }
 
-func (i *iterator[K]) seekToFirst() {
+func (i *Iterator[K]) SeekToFirst() {
 	i.node_ = i.list_.head_.next(0)
 }
 
-func (i *iterator[K]) seek(target K) {
+func (i *Iterator[K]) Seek(target K) {
 	i.node_ = i.list_.findGreaterOrEqual(target, nil)
 }
 
-func (i *iterator[K]) key() K {
+func (i *Iterator[K]) Key() K {
 	return i.node_.key
 }
 
-func (s *SkipList[K]) Iterator() iterator[K] {
-	return iterator[K]{list_: s}
+func (s *SkipList[K]) Iterator() Iterator[K] {
+	return Iterator[K]{list_: s}
 }
 
 func (s *SkipList[K]) Contains(key K) bool {

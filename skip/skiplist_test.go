@@ -1,4 +1,4 @@
-package leveldb
+package skip
 
 import "testing"
 

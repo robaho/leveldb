@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/robaho/leveldb/skip"
 	"io"
 	"os"
 	"path/filepath"
@@ -95,7 +96,7 @@ func keyValueCompare(options Options) func(a, b KeyValue) int {
 	}
 }
 
-func readLogFile(path string, options Options) (*SkipList[KeyValue], error) {
+func readLogFile(path string, options Options) (*skip.SkipList[KeyValue], error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
@@ -104,7 +105,7 @@ func readLogFile(path string, options Options) (*SkipList[KeyValue], error) {
 
 	r := bufio.NewReader(f)
 
-	list := NewSkipList(keyValueCompare(options))
+	list := skip.NewSkipList(keyValueCompare(options))
 
 	var len, kLen, vLen int32
 

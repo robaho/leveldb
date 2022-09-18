@@ -1,6 +1,7 @@
 package leveldb
 
 import (
+	"github.com/robaho/leveldb/skip"
 	"path/filepath"
 	"runtime"
 )
@@ -8,7 +9,7 @@ import (
 // memorySegment wraps an im-memory skip list and is backed by a sequential access log file.
 // The list uses a nil Value to designate a key that has been removed from the table.
 type memorySegment struct {
-	list    SkipList[KeyValue]
+	list    skip.SkipList[KeyValue]
 	log     *logFile
 	id      uint64
 	bytes   int
@@ -18,7 +19,7 @@ type memorySegment struct {
 
 func newMemorySegment(path string, id uint64, options Options) *memorySegment {
 	ms := new(memorySegment)
-	ms.list = NewSkipList(keyValueCompare(options))
+	ms.list = skip.NewSkipList(keyValueCompare(options))
 	ms.id = id
 	ms.path = path
 	ms.options = options
@@ -70,7 +71,7 @@ func (ms *memorySegment) Put(key []byte, value []byte) ([]byte, error) {
 	return prev.value, nil
 }
 func (ms *memorySegment) Get(key []byte) ([]byte, error) {
-	value, ok := ms.list.get(Key(key))
+	value, ok := ms.list.Get(Key(key))
 	if !ok {
 		return nil, KeyNotFound
 	}
@@ -117,11 +118,11 @@ func (ms *memorySegment) Write(wb WriteBatch) error {
 func (ms *memorySegment) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	itr := ms.list.Iterator()
 	if lower != nil {
-		itr.seek(Key(lower))
+		itr.Seek(Key(lower))
 	} else {
-		itr.seekToFirst()
+		itr.SeekToFirst()
 	}
-	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: ms.list.cmp_}, nil
+	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: keyValueCompare(ms.options)}, nil
 }
 
 func (ms *memorySegment) Close() error {
@@ -158,29 +159,29 @@ func (ms *memorySegment) files() []string {
 }
 
 type skiplistIterator struct {
-	itr   iterator[KeyValue]
+	itr   skip.Iterator[KeyValue]
 	lower KeyValue
 	upper KeyValue
 	cmp   func(KeyValue, KeyValue) int
 }
 
 func (es *skiplistIterator) Next() (key []byte, value []byte, err error) {
-	if !es.itr.valid() {
+	if !es.itr.Valid() {
 		return nil, nil, EndOfIterator
 	}
-	k := es.itr.key()
+	k := es.itr.Key()
 	if es.upper.key != nil && es.cmp(k, es.upper) > 0 {
 		return nil, nil, EndOfIterator
 	}
-	defer es.itr.next()
+	defer es.itr.Next()
 	return k.key, k.value, nil
 }
 
 func (es *skiplistIterator) peekKey() ([]byte, error) {
-	if !es.itr.valid() {
+	if !es.itr.Valid() {
 		return nil, EndOfIterator
 	}
-	k := es.itr.key()
+	k := es.itr.Key()
 	if es.upper.key != nil && es.cmp(k, es.upper) > 0 {
 		return nil, EndOfIterator
 	}

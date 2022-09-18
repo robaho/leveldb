@@ -1,6 +1,7 @@
 package leveldb
 
 import (
+	"github.com/robaho/leveldb/skip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,9 +9,10 @@ import (
 
 // logSegment is a read-only segment created from a previous run but not yet merged
 type logSegment struct {
-	list SkipList[KeyValue]
-	id   uint64
-	path string
+	list    skip.SkipList[KeyValue]
+	id      uint64
+	path    string
+	options Options
 }
 
 func newLogSegment(path string, options Options) (segment, error) {
@@ -23,6 +25,7 @@ func newLogSegment(path string, options Options) (segment, error) {
 	ls.list = *list
 	ls.id = getSegmentID(path)
 	ls.path = path
+	ls.options = options
 
 	return ls, nil
 }
@@ -35,7 +38,7 @@ func (ls *logSegment) UpperID() uint64 {
 }
 
 func (ls *logSegment) Get(key []byte) ([]byte, error) {
-	value, ok := ls.list.get(Key(key))
+	value, ok := ls.list.Get(Key(key))
 	if !ok {
 		return nil, KeyNotFound
 	}
@@ -55,11 +58,11 @@ func (ls *logSegment) Remove(key []byte) ([]byte, error) {
 func (ls *logSegment) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	itr := ls.list.Iterator()
 	if lower != nil {
-		itr.seek(Key(lower))
+		itr.Seek(Key(lower))
 	} else {
-		itr.seekToFirst()
+		itr.SeekToFirst()
 	}
-	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: ls.list.cmp_}, nil
+	return &skiplistIterator{itr: itr, lower: Key(lower), upper: Key(upper), cmp: keyValueCompare(ls.options)}, nil
 }
 
 func (ls *logSegment) Close() error {

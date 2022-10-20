@@ -31,7 +31,7 @@ func (db *Database) Get(key []byte) (value []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if value == nil {
+	if value != nil && len(value) == 0 {
 		return nil, KeyNotFound
 	}
 	return

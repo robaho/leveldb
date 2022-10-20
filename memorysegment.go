@@ -79,7 +79,7 @@ func (ms *memorySegment) Get(key []byte) ([]byte, error) {
 }
 
 func (ms *memorySegment) Remove(key []byte) ([]byte, error) {
-	return ms.Put(key, nil)
+	return ms.Put(key, emptyBytes)
 }
 
 func (ms *memorySegment) Write(wb WriteBatch) error {

@@ -45,9 +45,9 @@ func TestDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal("unable to remove by key", err)
 	}
-	_, err = db.Get([]byte("mykey"))
+	v, err := db.Get([]byte("mykey"))
 	if err != leveldb.KeyNotFound {
-		t.Fatal("should not of found removed key")
+		t.Fatal("should not of found removed key", v)
 	}
 	err = db.CloseWithMerge(1)
 	if err != nil {

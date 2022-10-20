@@ -1,17 +1,34 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/robaho/leveldb"
 	"log"
 	"math/rand"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 )
 
 const nr = 10000000
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+
 func main() {
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	runtime.GOMAXPROCS(4)
 
@@ -20,6 +37,14 @@ func main() {
 	testInsert(true)
 	testRead()
 	testInsertBatch()
+	testRead()
+	db, err := leveldb.Open("test/mydb", leveldb.Options{})
+	if err != nil {
+		panic(err)
+	}
+	db.Put([]byte(fmt.Sprintf("mykey%7d", 0)), []byte(fmt.Sprint("myvalue", 0)))
+	fmt.Println("closing with 1 segment")
+	db.CloseWithMerge(1)
 	testRead()
 }
 
@@ -103,6 +128,7 @@ func testRead() {
 	if err != nil {
 		log.Fatal("unable to open database", err)
 	}
+	fmt.Println("number of segments", db.Stats().NumberOfSegments)
 	start := time.Now()
 	itr, err := db.Lookup(nil, nil)
 	count := 0

@@ -85,7 +85,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 
 		segments = segments[index : index+len(mergable)]
 
-		newseg, err := mergeSegments1(db.deleter, db.path, segments)
+		newseg, err := mergeSegments1(db.deleter, db.path, segments, index == 0)
 		if err != nil {
 			return err
 		}
@@ -121,7 +121,7 @@ func mergeSegments0(db *Database, segmentCount int) error {
 	}
 }
 
-func mergeSegments1(deleter Deleter, dbpath string, segments []segment) (segment, error) {
+func mergeSegments1(deleter Deleter, dbpath string, segments []segment, purgeDeleted bool) (segment, error) {
 
 	lowerId := segments[0].LowerID()
 	upperId := segments[len(segments)-1].UpperID()
@@ -140,7 +140,7 @@ func mergeSegments1(deleter Deleter, dbpath string, segments []segment) (segment
 		return nil, err
 	}
 
-	seg, err := writeAndLoadSegment(keyFilename, dataFilename, itr)
+	seg, err := writeAndLoadSegment(keyFilename, dataFilename, itr, purgeDeleted)
 	if err != nil {
 		return nil, err
 	}

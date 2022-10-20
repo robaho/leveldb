@@ -18,7 +18,7 @@ func TestDiskSegment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr)
+	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr, false)
 
 	itr, err = ds.Lookup(nil, nil)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestLargeDiskSegment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr)
+	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr, false)
 
 	itr, err = ds.Lookup(nil, nil)
 	count := 0
@@ -141,7 +141,7 @@ func TestEmptySegment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr)
+	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr, false)
 
 	itr, err = ds.Lookup(nil, nil)
 	count := 0
@@ -154,6 +154,36 @@ func TestEmptySegment(t *testing.T) {
 	}
 	// the segment must return the empty array for the key, so that removes are accurate in the case of multi segment multi
 	if count != 1 {
+		t.Fatal("incorrect count", count)
+	}
+	os.RemoveAll("test")
+
+}
+
+func TestEmptySegmentWithPurge(t *testing.T) {
+	os.RemoveAll("test")
+	os.Mkdir("test", os.ModePerm)
+	m := newMemoryOnlySegment()
+	m.Put([]byte("mykey"), []byte("myvalue"))
+	m.Remove([]byte("mykey"))
+	itr, err := m.Lookup(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ds, err := writeAndLoadSegment("test/keys.0.0", "test/data.0.0", itr, true)
+
+	itr, err = ds.Lookup(nil, nil)
+	count := 0
+	for {
+		_, _, err := itr.Next()
+		if err != nil {
+			break
+		}
+		count++
+	}
+	// the segment must return the empty array for the key, so that removes are accurate in the case of multi segment multi
+	if count != 0 {
 		t.Fatal("incorrect count", count)
 	}
 	os.RemoveAll("test")

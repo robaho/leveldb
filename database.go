@@ -21,6 +21,10 @@ type dbState struct {
 	multi    segment
 }
 
+type Statistics struct {
+	NumberOfSegments int
+}
+
 // Database reference is obtained via Open()
 type Database struct {
 	sync.Mutex
@@ -83,6 +87,11 @@ type LookupIterator interface {
 	// returns the next non-deleted key in the index
 	peekKey() ([]byte, error)
 }
+
+type emptyIterator struct{}
+
+func (i *emptyIterator) Next() (key []byte, value []byte, err error) { return nil, nil, EndOfIterator }
+func (i *emptyIterator) peekKey() ([]byte, error)                    { return nil, EndOfIterator }
 
 var global_lock sync.RWMutex
 
@@ -293,7 +302,7 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 			db.wg.Add(1)
 			go func(s *memorySegment) {
 				err0 := writeSegmentToDisk(db, s)
-				if err0 != nil && err != errEmptySegment {
+				if err0 != nil {
 					db.err = err0
 				}
 				db.wg.Done()
@@ -326,6 +335,12 @@ func (db *Database) getState() *dbState {
 }
 func (db *Database) setState(state *dbState) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&db.state)), unsafe.Pointer(state))
+}
+
+func (db *Database) Stats() Statistics {
+	db.Lock()
+	defer db.Unlock()
+	return Statistics{NumberOfSegments: len(db.getState().segments)}
 }
 
 func less(a []byte, b []byte) bool {

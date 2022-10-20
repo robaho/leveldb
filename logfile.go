@@ -21,7 +21,6 @@ type logFile struct {
 	w            *bufio.Writer
 	id           uint64
 	inBatch      bool
-	syncWrite    bool
 	disableFlush bool
 }
 

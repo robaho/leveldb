@@ -17,9 +17,6 @@ const compressedBit uint16 = 0x8000
 const maxPrefixLen uint16 = 0xFF ^ 0x80
 const maxCompressedLen uint16 = 0xFF
 const keyIndexInterval int = 16
-const removedKeyLen = 0xFFFFFFFF
-
-var errEmptySegment = errors.New("empty segment")
 
 // called to write a memory segment to disk after which the memory segment is closed, and the log file removed
 func writeSegmentToDisk(db *Database, seg *memorySegment) error {
@@ -28,10 +25,10 @@ func writeSegmentToDisk(db *Database, seg *memorySegment) error {
 		return err
 	}
 
-	if _, err = itr.peekKey(); err == errEmptySegment {
+	if _, err = itr.peekKey(); err == EndOfIterator {
 		seg.removeSegment()
 		// simply return and re-use existing memory segment
-		return errEmptySegment
+		return nil
 	}
 
 	lowerId := seg.LowerID()
@@ -40,22 +37,21 @@ func writeSegmentToDisk(db *Database, seg *memorySegment) error {
 	keyFilename := filepath.Join(db.path, fmt.Sprintf("keys.%d.%d", lowerId, upperId))
 	dataFilename := filepath.Join(db.path, fmt.Sprintf("data.%d.%d", lowerId, upperId))
 
-	_, err = writeAndLoadSegment(keyFilename, dataFilename, itr)
-	if err != nil && err != errEmptySegment {
+	_, err = writeAndLoadSegment(keyFilename, dataFilename, itr, false)
+	if err != nil {
 		return err
 	}
-
 	seg.removeSegment()
 
 	return nil
 }
 
-func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator) (segment, error) {
+func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator, purgeDeleted bool) (segment, error) {
 
 	keyFilenameTmp := keyFilename + ".tmp"
 	dataFilenameTmp := dataFilename + ".tmp"
 
-	keyIndex, err := writeSegmentFiles(keyFilenameTmp, dataFilenameTmp, itr)
+	keyIndex, err := writeSegmentFiles(keyFilenameTmp, dataFilenameTmp, itr, purgeDeleted)
 	if err != nil {
 		os.Remove(keyFilenameTmp)
 		os.Remove(dataFilenameTmp)
@@ -68,7 +64,7 @@ func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator) (
 	return newDiskSegment(keyFilename, dataFilename, keyIndex), nil
 }
 
-func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte, error) {
+func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator, purgeDeleted bool) ([][]byte, error) {
 
 	var keyIndex [][]byte
 
@@ -101,6 +97,9 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 		if err != nil {
 			break
 		}
+		if purgeDeleted && len(value) == 0 {
+			continue
+		}
 		keyCount++
 
 		dataW.Write(value)
@@ -122,12 +121,7 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 			block++
 		}
 
-		var dataLen uint32
-		if value == nil {
-			dataLen = removedKeyLen
-		} else {
-			dataLen = uint32(len(value))
-		}
+		dataLen := uint32(len(value))
 
 		dk := encodeKey(key, prevKey)
 		prevKey = make([]byte, len(key))
@@ -163,10 +157,6 @@ func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator) ([][]byte
 
 	keyW.Flush()
 	dataW.Flush()
-
-	if keyCount == 0 {
-		return nil, errEmptySegment
-	}
 
 	return keyIndex, nil
 

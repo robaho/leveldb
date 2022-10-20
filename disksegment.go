@@ -60,8 +60,6 @@ type diskSegmentIterator struct {
 	finished     bool
 }
 
-var errKeyRemoved = errors.New("key removed")
-
 func loadDiskSegments(directory string, options Options) ([]segment, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
@@ -112,8 +110,7 @@ func loadDiskSegments(directory string, options Options) ([]segment, error) {
 			segments = append(segments, ls)
 			continue
 		}
-		index := strings.Index(file.Name(), "keys.")
-		if index < 0 {
+		if !strings.HasPrefix(file.Name(), "keys.") {
 			continue
 		}
 		lowerId, upperId := getSegmentIDs(file.Name())
@@ -131,17 +128,18 @@ func loadDiskSegments(directory string, options Options) ([]segment, error) {
 		return id1 < id2
 	})
 	// remove any segments that are fully contained in another segment
-tryagain:
-	for i := 0; i < len(segments); i++ {
+next:
+	for i := 0; i < len(segments); {
 		seg := segments[i]
 		for j := i + 1; j < len(segments); j++ {
 			seg0 := segments[j]
 			if seg.LowerID() >= seg0.LowerID() && seg.UpperID() <= seg0.UpperID() {
-				segments = segments[i+1:]
+				segments = append(segments[:i], segments[i+1:]...)
 				seg.removeSegment()
-				goto tryagain
+				continue next
 			}
 		}
+		i++
 	}
 	return segments, nil
 }
@@ -203,7 +201,11 @@ func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment
 func loadKeyIndex(kf *memoryMappedFile, keyBlocks int64) [][]byte {
 	buffer := make([]byte, keyBlockSize)
 	keyIndex := make([][]byte, 0)
-	// build key index
+
+	if kf.Length() == 0 {
+		return keyIndex
+	}
+
 	var block int64
 	for block = 0; block < keyBlocks; block += int64(keyIndexInterval) {
 		_, err := kf.ReadAt(buffer, block*keyBlockSize)
@@ -310,8 +312,8 @@ func (dsi *diskSegmentIterator) nextKeyValue() error {
 		}
 	found:
 
-		if datalen == removedKeyLen {
-			dsi.data = nil
+		if datalen == 0 {
+			dsi.data = emptyBytes
 		} else {
 			dsi.data = make([]byte, datalen)
 			_, err = dsi.segment.dataFile.ReadAt(dsi.data, int64(dataoffset))
@@ -338,14 +340,18 @@ func (ds *diskSegment) Remove(key []byte) ([]byte, error) {
 	panic("disk segments are immutable, unable to Remove")
 }
 
+var emptyBytes = make([]byte, 0)
+
 func (ds *diskSegment) Get(key []byte) ([]byte, error) {
 	offset, len, err := binarySearch(ds, key)
-	if err == errKeyRemoved {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
 	}
+
+	if len == 0 {
+		return emptyBytes, nil
+	}
+
 	buffer := make([]byte, len)
 	_, err = ds.dataFile.ReadAt(buffer, offset)
 	if err != nil {
@@ -449,9 +455,6 @@ func scanBlock(ds *diskSegment, block int64, key []byte) (offset int64, len uint
 		if bytes.Equal(_key, key) {
 			offset = int64(binary.LittleEndian.Uint64(buffer[endkey:]))
 			len = binary.LittleEndian.Uint32(buffer[endkey+8:])
-			if len == removedKeyLen {
-				err = errKeyRemoved
-			}
 			return
 		}
 		if !less(_key, key) {
@@ -462,6 +465,9 @@ func scanBlock(ds *diskSegment, block int64, key []byte) (offset int64, len uint
 }
 
 func (ds *diskSegment) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
+	if ds.keyFile.Length() == 0 {
+		return &emptyIterator{}, nil
+	}
 	buffer := make([]byte, keyBlockSize)
 	var block int64 = 0
 	if lower != nil {

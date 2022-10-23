@@ -41,7 +41,8 @@ type Database struct {
 	lockfile  lockfile.Lockfile
 	options   Options
 	// atomic CAS to avoid contention, db.state is read-only
-	state *dbState
+	state     *dbState
+	snapshots []*Snapshot
 
 	// if non-nil an asynchronous error has occurred, and the database cannot be used. must be atomically updated
 	err error
@@ -296,6 +297,10 @@ func (db *Database) CloseWithMerge(segmentCount int) error {
 
 	// write any remaining memory segments to disk
 	db.Lock()
+	for _, s := range db.snapshots {
+		s.Close()
+	}
+	db.snapshots = nil
 	for _, s := range db.state.segments {
 		ms, ok := s.(*memorySegment)
 		if ok {

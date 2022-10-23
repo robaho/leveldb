@@ -1,5 +1,7 @@
 package leveldb
 
+import "runtime"
+
 // Special iterator to skip removed records.
 type dbLookup struct {
 	LookupIterator
@@ -93,6 +95,29 @@ func (db *Database) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 		return nil, err
 	}
 	return &dbLookup{LookupIterator: itr, db: db}, nil
+}
+
+func (db *Database) Snapshot() (*Snapshot, error) {
+	db.Lock()
+	defer db.Unlock()
+
+	if !db.open {
+		return nil, DatabaseClosed
+	}
+
+	state := db.getState()
+	segments := copyAndAppend(state.segments, state.memory)
+	memory := newMemorySegment(db.path, db.nextSegmentID(), db.options)
+	multi := newMultiSegment(copyAndAppend(segments, memory))
+	db.setState(&dbState{segments: segments, memory: memory, multi: multi})
+
+	s := &Snapshot{
+		db:    db,
+		multi: newMultiSegment(segments),
+	}
+	db.snapshots = append(db.snapshots, s)
+	runtime.SetFinalizer(s, func(s *Snapshot) { s.Close() })
+	return s, nil
 }
 
 func (db *Database) Write(wb WriteBatch) error {

@@ -68,7 +68,7 @@ func testWrite(sync bool) {
 	end := time.Now()
 	duration := end.Sub(start).Microseconds()
 
-	mode := ""
+	mode := "no-sync"
 	if sync {
 		mode = "sync"
 	}

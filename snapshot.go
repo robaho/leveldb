@@ -1,6 +1,7 @@
 package leveldb
 
-// Snapshot is a read-only view of the database at a moment in time.
+// Snapshot is a read-only view of the database at a moment in time. A Snapshot can be used by multiple go routines,
+// but access across Close() and other operations must be externally synchronized.
 type Snapshot struct {
 	db    *Database
 	multi *multiSegment
@@ -9,9 +10,6 @@ type Snapshot struct {
 func (s *Snapshot) Get(key []byte) ([]byte, error) {
 	if !s.db.open {
 		return nil, DatabaseClosed
-	}
-	if s.multi == nil {
-		return nil, SnapshotClosed
 	}
 	value, err := s.multi.Get(key)
 	if err != nil {
@@ -34,7 +32,8 @@ func (s *Snapshot) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
 	return &dbLookup{LookupIterator: itr, db: s.db}, nil
 }
 
-// Close frees any resources used by the Snapshot.
+// Close frees any resources used by the Snapshot. This is optional and instead simply setting the Snapshot reference
+// to nil will eventually free the resources.
 func (s *Snapshot) Close() {
 	s.multi = nil
 }

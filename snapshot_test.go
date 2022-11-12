@@ -112,7 +112,7 @@ func TestSnapshot_DbClose(t *testing.T) {
 	}
 	db.Close()
 	_, err = s.Get([]byte("mykey"))
-	if err != leveldb.DatabaseClosed {
+	if err != leveldb.SnapshotClosed {
 		t.Fatal("should have been closed", err)
 	}
 }

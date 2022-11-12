@@ -40,7 +40,7 @@ func mergeSegments(db *Database) {
 	}
 }
 
-func mergeSegments0(db *Database, segmentCount int) error {
+func mergeSegments0(db *Database, segmentCount uint) error {
 	// only a single routine can be in mergeSegments0 to avoid deadlock
 	if !atomic.CompareAndSwapInt32(&db.inMerge, 0, 1) {
 		return nil
@@ -49,13 +49,11 @@ func mergeSegments0(db *Database, segmentCount int) error {
 
 	//fmt.Println("merging segments", db.path)
 
-	var index = 0
-
 	for {
 
 		segments := db.getState().segments
 
-		if len(segments) <= segmentCount {
+		if len(segments) <= int(segmentCount) {
 			return nil
 		}
 
@@ -68,19 +66,24 @@ func mergeSegments0(db *Database, segmentCount int) error {
 
 		mergable := make([]segment, 0)
 
+		smallest := 0
+		for i, s := range segments[1:] {
+			if s.size() < segments[smallest].size() {
+				smallest = i
+			}
+		}
+
+		if smallest > 0 && smallest == len(segments)-1 {
+			smallest--
+		}
+
+		index := smallest
+
 		for _, s := range segments[index:] {
 			mergable = append(mergable, s)
 			if len(mergable) == maxMergeSize {
 				break
 			}
-		}
-
-		if len(mergable) < 2 {
-			if index == 0 {
-				return nil
-			}
-			index = 0
-			continue
 		}
 
 		segments = segments[index : index+len(mergable)]

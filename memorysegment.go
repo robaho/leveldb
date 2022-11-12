@@ -12,7 +12,7 @@ type memorySegment struct {
 	list    skip.SkipList[KeyValue]
 	log     *logFile
 	id      uint64
-	bytes   int
+	bytes   uint64
 	path    string
 	options Options
 }
@@ -55,13 +55,17 @@ func (ms *memorySegment) maybeCreateLogFile() error {
 	return nil
 }
 
+func (ms *memorySegment) size() uint64 {
+	return ms.bytes
+}
+
 func (ms *memorySegment) Put(key []byte, value []byte) ([]byte, error) {
 	err := ms.maybeCreateLogFile()
 	if err != nil {
 		return nil, err
 	}
 	prev := ms.list.Put(KeyValue{key: key, value: value})
-	ms.bytes += len(key) + len(value) - len(prev.key) - len(prev.value)
+	ms.bytes += uint64(len(key) + len(value) - len(prev.key) - len(prev.value))
 	if ms.log != nil {
 		err = ms.log.Write(key, value)
 		if err != nil {
@@ -98,7 +102,7 @@ func (ms *memorySegment) Write(wb WriteBatch) error {
 
 	for _, kv := range wb.entries {
 		prev := ms.list.Put(kv)
-		ms.bytes += len(kv.key) + len(kv.value) - len(prev.key) - len(prev.value)
+		ms.bytes += uint64(len(kv.key) + len(kv.value) - len(prev.key) - len(prev.value))
 		if ms.log != nil {
 			err := ms.log.Write(kv.key, kv.value)
 			if err != nil {

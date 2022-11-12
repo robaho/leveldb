@@ -44,6 +44,7 @@ type diskSegment struct {
 	// nil for segments loaded during initial open
 	// otherwise holds the key for every keyIndexInterval block
 	keyIndex [][]byte
+	filesize uint64
 }
 
 type diskSegmentIterator struct {
@@ -116,7 +117,11 @@ func loadDiskSegments(directory string, options Options) ([]segment, error) {
 		lowerId, upperId := getSegmentIDs(file.Name())
 		keyFilename := filepath.Join(directory, fmt.Sprintf("keys.%d.%d", lowerId, upperId))
 		dataFilename := filepath.Join(directory, fmt.Sprintf("data.%d.%d", lowerId, upperId))
-		segments = append(segments, newDiskSegment(keyFilename, dataFilename, nil)) // don't have keyIndex
+		segment, err := newDiskSegment(keyFilename, dataFilename, nil)
+		if err != nil {
+			return nil, err
+		}
+		segments = append(segments, segment) // don't have keyIndex
 	}
 	sort.Slice(segments, func(i, j int) bool {
 		id1, id2 := segments[i].UpperID(), segments[j].UpperID()
@@ -168,7 +173,7 @@ func getSegmentIDs(filename string) (lower, upper uint64) {
 	return uint64(id0), uint64(id1)
 }
 
-func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment {
+func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) (segment, error) {
 
 	lower, upper := getSegmentIDs(keyFilename)
 
@@ -194,8 +199,20 @@ func newDiskSegment(keyFilename, dataFilename string, keyIndex [][]byte) segment
 	}
 
 	ds.keyIndex = keyIndex
+	kInfo, err := os.Stat(keyFilename)
+	if err != nil {
+		return nil, err
+	}
+	dInfo, err := os.Stat(dataFilename)
+	if err != nil {
+		return nil, err
+	}
+	ds.filesize = uint64(kInfo.Size() + dInfo.Size())
+	return ds, nil
+}
 
-	return ds
+func (ds *diskSegment) size() uint64 {
+	return ds.filesize
 }
 
 func loadKeyIndex(kf *memoryMappedFile, keyBlocks int64) [][]byte {
@@ -366,23 +383,22 @@ func binarySearch(ds *diskSegment, key []byte) (offset int64, length uint32, err
 	var lowblock int64 = 0
 	highblock := ds.keyBlocks - 1
 
-	if ds.keyIndex != nil { // we have memory index, so narrow block range down
-		index := sort.Search(len(ds.keyIndex), func(i int) bool {
-			return less(key, ds.keyIndex[i])
-		})
+	// use memory index to narrow search
+	index := sort.Search(len(ds.keyIndex), func(i int) bool {
+		return less(key, ds.keyIndex[i])
+	})
 
-		if index == 0 {
-			return 0, 0, KeyNotFound
-		}
+	if index == 0 {
+		return 0, 0, KeyNotFound
+	}
 
-		index--
+	index--
 
-		lowblock = int64(index * keyIndexInterval)
-		highblock = lowblock + int64(keyIndexInterval)
+	lowblock = int64(index * keyIndexInterval)
+	highblock = lowblock + int64(keyIndexInterval)
 
-		if highblock >= ds.keyBlocks {
-			highblock = ds.keyBlocks - 1
-		}
+	if highblock >= ds.keyBlocks {
+		highblock = ds.keyBlocks - 1
 	}
 
 	block, err := binarySearch0(ds, lowblock, highblock, key, buffer)
@@ -471,11 +487,14 @@ func (ds *diskSegment) Lookup(lower []byte, upper []byte) (LookupIterator, error
 	buffer := make([]byte, keyBlockSize)
 	var block int64 = 0
 	if lower != nil {
-		startBlock, err := binarySearch0(ds, 0, ds.keyBlocks-1, lower, buffer)
-		if err != nil {
-			return nil, err
+		index := sort.Search(len(ds.keyIndex), func(i int) bool {
+			return less(lower, ds.keyIndex[i])
+		})
+		index--
+		if index < 0 {
+			index = 0
 		}
-		block = startBlock
+		block = int64(index * keyIndexInterval)
 	}
 	n, err := ds.keyFile.ReadAt(buffer, block*keyBlockSize)
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 
 // benchmark similar in scope to leveldb db_bench.cc, uses 16 byte keys and 100 byte values
 
-const nr = 1000000
+const nr = 10000000
 const vSize = 100
 const kSize = 16
 const batchSize = 1000

@@ -148,7 +148,7 @@ func testRead() {
 	fmt.Println("scan time ", duration/1000, "ms, usec per op ", float64(duration)/nr)
 
 	start = time.Now()
-	itr, err = db.Lookup([]byte("mykey 300000"), []byte("mykey 799999"))
+	itr, err = db.Lookup([]byte("mykey5000000"), []byte("mykey5099999"))
 	count = 0
 	for {
 		_, _, err = itr.Next()
@@ -157,13 +157,13 @@ func testRead() {
 		}
 		count++
 	}
-	if count != 500000 {
-		log.Fatal("incorrect count != 500000, count is ", count)
+	if count != nr/100 {
+		log.Fatal("incorrect count, count is ", count)
 	}
 	end = time.Now()
 	duration = end.Sub(start).Microseconds()
 
-	fmt.Println("scan time 50% ", duration/1000, "ms, usec per op ", float64(duration)/500000)
+	fmt.Println("scan time 1% ", duration/1000, "ms, usec per op ", float64(duration)/(nr/100))
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 

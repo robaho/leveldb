@@ -24,3 +24,33 @@ func errn(errs ...error) error {
 	}
 	return nil
 }
+
+// MapError maps err to a leveldb error, or returns a new error for err
+func MapError(err string) error {
+	switch err {
+	case KeyNotFound.Error():
+		return KeyNotFound
+	case KeyTooLong.Error():
+		return KeyTooLong
+	case EmptyKey.Error():
+		return EmptyKey
+	case DatabaseClosed.Error():
+		return DatabaseClosed
+	case DatabaseInUse.Error():
+		return DatabaseInUse
+	case SnapshotClosed.Error():
+		return SnapshotClosed
+	case NoDatabaseFound.Error():
+		return NoDatabaseFound
+	case DatabaseCorrupted.Error():
+		return DatabaseCorrupted
+	case NotADirectory.Error():
+		return NotADirectory
+	case EndOfIterator.Error():
+		return EndOfIterator
+	case ReadOnlySegment.Error():
+		return ReadOnlySegment
+	default:
+		return errors.New(err)
+	}
+}

@@ -61,7 +61,7 @@ func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator, p
 	os.Rename(keyFilenameTmp, keyFilename)
 	os.Rename(dataFilenameTmp, dataFilename)
 
-	return newDiskSegment(keyFilename, dataFilename, keyIndex), nil
+	return newDiskSegment(keyFilename, dataFilename, keyIndex)
 }
 
 func writeSegmentFiles(keyFName, dataFName string, itr LookupIterator, purgeDeleted bool) ([][]byte, error) {

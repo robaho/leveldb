@@ -119,7 +119,7 @@ func TestLargeDiskSegment(t *testing.T) {
 	itr, err = ds.Lookup([]byte("mykey1"), []byte("mykey1"))
 	key, data, err := itr.Next()
 	if err != nil {
-		t.Fatal("key should be found")
+		t.Fatal("key should be found", err)
 	}
 	if string(key) != "mykey1" {
 		t.Fatal("key is not mykey1")

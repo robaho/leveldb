@@ -9,10 +9,11 @@ import (
 
 // logSegment is a read-only segment created from a previous run but not yet merged
 type logSegment struct {
-	list    skip.SkipList[KeyValue]
-	id      uint64
-	path    string
-	options Options
+	list     skip.SkipList[KeyValue]
+	id       uint64
+	path     string
+	options  Options
+	filesize uint64
 }
 
 func newLogSegment(path string, options Options) (segment, error) {
@@ -26,8 +27,17 @@ func newLogSegment(path string, options Options) (segment, error) {
 	ls.id = getSegmentID(path)
 	ls.path = path
 	ls.options = options
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	ls.filesize = uint64(info.Size())
 
 	return ls, nil
+}
+
+func (ls *logSegment) size() uint64 {
+	return ls.filesize
 }
 
 func (ls *logSegment) LowerID() uint64 {

@@ -1,6 +1,8 @@
 package leveldb
 
-import "runtime"
+import (
+	"runtime"
+)
 
 // Special iterator to skip removed records.
 type dbLookup struct {
@@ -83,20 +85,19 @@ func (db *Database) Remove(key []byte) ([]byte, error) {
 	return value, nil
 }
 
-// Lookup finds matching record between lower and upper inclusive. lower or upper can be nil
-// and then the range is unbounded on that side. Using the iterator after the transaction has
-// been Commit/Rollback is not supported.
+// Lookup finds matching records between lower and upper inclusive. lower or upper can be nil
+// and then the range is unbounded on that side. If the database is mutated during iteration, the returned results
+// are undefined and are likely to be invalid in conjunction with a large number of mutations. A Snapshot should be
+// used in this case.
 func (db *Database) Lookup(lower []byte, upper []byte) (LookupIterator, error) {
-	if !db.open {
-		return nil, DatabaseClosed
-	}
-	itr, err := db.getState().multi.Lookup(lower, upper)
+	s, err := db.Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	return &dbLookup{LookupIterator: itr, db: db}, nil
+	return s.Lookup(lower, upper)
 }
 
+// Snapshot creates a read-only view of the database at a moment in time.
 func (db *Database) Snapshot() (*Snapshot, error) {
 	db.Lock()
 	defer db.Unlock()
@@ -136,7 +137,7 @@ func (db *Database) Write(wb WriteBatch) error {
 
 func (db *Database) maybeSwapMemory() {
 	state := db.getState()
-	if state.memory.bytes > db.options.MaxMemoryBytes {
+	if state.memory.size() > db.options.MaxMemoryBytes {
 		segments := copyAndAppend(state.segments, state.memory)
 		memory := newMemorySegment(db.path, db.nextSegmentID(), db.options)
 		multi := newMultiSegment(copyAndAppend(segments, memory))
@@ -149,7 +150,7 @@ func (db *Database) maybeMerge() {
 		return
 	}
 	state := db.getState()
-	if len(state.segments) > 2*db.options.MaxSegments {
+	if len(state.segments) > int(2*db.options.MaxSegments) {
 		mergeSegments0(db, db.options.MaxSegments)
 	}
 }

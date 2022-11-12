@@ -67,10 +67,10 @@ type Options struct {
 	// Maximum number of segments per database which controls the number of open files.
 	// If the number of segments exceeds 2x this value, producers are paused while the
 	// segments are merged.
-	MaxSegments int
+	MaxSegments uint
 	// Maximum size of memory segment in bytes. Maximum memory usage per database is
 	// roughly MaxSegments * MaxMemoryBytes but can be higher based on producer rate.
-	MaxMemoryBytes int
+	MaxMemoryBytes uint64
 	// Disable flush to disk when writing to increase performance.
 	DisableWriteFlush bool
 	// Force sync to disk when writing. If true, then DisableWriteFlush is ignored.
@@ -260,7 +260,7 @@ func (db *Database) Close() error {
 
 // CloseWithMerge closes the database with control of the segment count. if segmentCount is 0, then
 // the merge process is skipped
-func (db *Database) CloseWithMerge(segmentCount int) error {
+func (db *Database) CloseWithMerge(segmentCount uint) error {
 	global_lock.Lock()
 	defer global_lock.Unlock()
 	if !db.open {

@@ -73,6 +73,14 @@ func (msi *multiSegmentIterator) Next() (key []byte, value []byte, err error) {
 	return
 }
 
+func (ms *multiSegment) size() uint64 {
+	var size uint64 = 0
+	for _, s := range ms.segments {
+		size += s.size()
+	}
+	return size
+}
+
 // Creates a new multiSegment. The passed segments should no longer be referenced.
 func newMultiSegment(segments []segment) *multiSegment {
 	return &multiSegment{segments: segments}

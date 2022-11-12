@@ -13,4 +13,5 @@ type segment interface {
 	removeSegment() error
 	removeOnFinalize()
 	files() []string
+	size() uint64
 }

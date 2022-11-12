@@ -8,8 +8,8 @@ type Snapshot struct {
 }
 
 func (s *Snapshot) Get(key []byte) ([]byte, error) {
-	if !s.db.open {
-		return nil, DatabaseClosed
+	if s.multi == nil {
+		return nil, SnapshotClosed
 	}
 	value, err := s.multi.Get(key)
 	if err != nil {

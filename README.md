@@ -16,17 +16,13 @@ compressed keys which allows for very efficient storage of time series data
 (market tick data) in the same table
 
 use the dbdump and dbload utilities to save/restore databases to a single file, but just zipping up the directory works as
-well...
+well.
 
 see the related http://github.com/robaho/leveldbr which allows remote access to a leveldb instance, and allows a leveldb database to be shared by multiple processes
       
 # TODOs
 
 make some settings configurable
-
-purge removed key/value, it currently stores an empty []byte
-
-snapshot support
 
 seek to end, backwards iteration
 
@@ -47,23 +43,25 @@ seek to end, backwards iteration
 
 # Performance
 
-Using example/performance.go
+DbBench using Go 1.19.2
 
 ```
-Using Go 1.19:
-insert  time  10000000 records =  48406 ms, usec per op  4.8406189
-close time  2535 ms
-scan time  3943 ms, usec per op  0.3943393
-scan time 50%  69 ms, usec per op  0.138772
-random access time  3.490679 us per get
-insert NoFlush time  10000000 records =  12235 ms, usec per op  1.2235342
-close time  6556 ms
-scan time  3442 ms, usec per op  0.3442262
-scan time 50%  70 ms, usec per op  0.141112
-random access time  3.636962 us per get
-insert batch time  10000000 records =  11967 ms, usec per op  1.1967498
-close time  8024 ms
-scan time  3354 ms, usec per op  0.3354182
-scan time 50%  65 ms, usec per op  0.13129
-random access time  3.641579 us per get
+write no-sync time 1000000 records = 4586 ms, usec per op 4.586062
+close time  1271 ms
+database size  118M
+write sync time 10000 records = 1014 ms, usec per op 101.4993
+close time  8 ms
+database size  1M
+batch insert time  1000000 records =  1204 ms, usec per op  1.204402
+close time  1380 ms
+database size  118M
+write no-sync overwrite time 1000000 records = 4743 ms, usec per op 4.743957
+close time  1272 ms
+database size  237M
+read random time  3.69818 us per get
+read seq time  1791 ms, usec per op  1.791742
+compact time  2851 ms
+database size  118M
+read random time  2.04372 us per get
+read seq time  132 ms, usec per op  0.132152
 ```

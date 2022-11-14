@@ -12,12 +12,13 @@ import (
 
 // benchmark similar in scope to leveldb db_bench.cc, uses 16 byte keys and 100 byte values
 
-const nr = 10000000
+const nr = 1000000
 const vSize = 100
 const kSize = 16
 const batchSize = 1000
 
 var value []byte
+var dbname = "test/mydb"
 
 func main() {
 
@@ -26,36 +27,33 @@ func main() {
 
 	runtime.GOMAXPROCS(4)
 
-	testWrite(false)
+	testWrite(false, true)
+	testWrite(true, true)
 	testBatch()
-	testWrite(true)
+	testWrite(false, false)
 	testRead()
-
-	db, err := leveldb.Open("test/mydb", leveldb.Options{})
-	if err != nil {
-		log.Fatal("unable to open database", err)
-	}
-	start := time.Now()
-	db.CloseWithMerge(1)
-	end := time.Now()
-	duration := end.Sub(start).Microseconds()
-
-	fmt.Println("close with merge 1 time ", float64(duration)/1000, "ms")
-
+	testCompact()
 	testRead()
 }
 
-func testWrite(sync bool) {
-	leveldb.Remove("test/mydb")
+func testWrite(sync bool, remove bool) {
+	if remove {
+		leveldb.Remove(dbname)
+	}
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync, MaxSegments: 64})
+	db, err := leveldb.Open(dbname, leveldb.Options{CreateIfNeeded: true, EnableSyncWrite: sync, MaxSegments: 64})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}
 
 	start := time.Now()
 
-	for i := 0; i < nr; i++ {
+	n := nr
+	if sync {
+		n = n / 100
+	}
+
+	for i := 0; i < n; i++ {
 		key := make([]byte, kSize)
 		keyS := []byte(fmt.Sprintf("%07d.........", i))
 		copy(key, keyS)
@@ -72,8 +70,11 @@ func testWrite(sync bool) {
 	if sync {
 		mode = "sync"
 	}
+	if !remove {
+		mode = mode + " overwrite"
+	}
 
-	fmt.Println("insert", mode, "time", nr, "records =", duration/1000, "ms, usec per op", float64(duration)/nr)
+	fmt.Println("write", mode, "time", n, "records =", duration/1000, "ms, usec per op", float64(duration)/float64(n))
 	start = time.Now()
 	err = db.Close()
 	end = time.Now()
@@ -88,9 +89,9 @@ func testWrite(sync bool) {
 }
 
 func testBatch() {
-	leveldb.Remove("test/mydb")
+	leveldb.Remove(dbname)
 
-	db, err := leveldb.Open("test/mydb", leveldb.Options{CreateIfNeeded: true, MaxSegments: 64})
+	db, err := leveldb.Open(dbname, leveldb.Options{CreateIfNeeded: true, MaxSegments: 64})
 	if err != nil {
 		log.Fatal("unable to create database", err)
 	}
@@ -121,7 +122,19 @@ func testBatch() {
 
 	fmt.Println("database size ", dbsize("test/mydb"))
 }
+func testCompact() {
+	db, err := leveldb.Open(dbname, leveldb.Options{CreateIfNeeded: false, MaxSegments: 64})
+	if err != nil {
+		log.Fatal("unable to create database", err)
+	}
+	start := time.Now()
+	db.CloseWithMerge(1)
+	end := time.Now()
+	duration := end.Sub(start).Microseconds()
 
+	fmt.Println("compact time ", duration/1000.0, "ms")
+	fmt.Println("database size ", dbsize("test/mydb"))
+}
 func dbsize(path string) string {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -140,6 +153,21 @@ func testRead() {
 		log.Fatal("unable to open database", err)
 	}
 	start := time.Now()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := 0; i < nr/10; i++ {
+		index := r.Intn(nr / 10)
+		_, err := db.Get([]byte(fmt.Sprintf("%07d.........", index)))
+		if err != nil {
+			panic(err)
+		}
+	}
+	end := time.Now()
+	duration := end.Sub(start).Microseconds()
+
+	fmt.Println("read random time ", float64(duration)/(nr/10), "us per get")
+
+	start = time.Now()
 	itr, err := db.Lookup(nil, nil)
 	count := 0
 	for {
@@ -152,44 +180,13 @@ func testRead() {
 	if count != nr {
 		log.Fatal("incorrect count != ", nr, ", count is ", count)
 	}
-	end := time.Now()
-	duration := end.Sub(start).Microseconds()
-
-	fmt.Println("scan time ", duration/1000, "ms, usec per op ", float64(duration)/nr)
-
-	start = time.Now()
-	itr, err = db.Lookup([]byte("0300000........."), []byte("0799999........."))
-	count = 0
-	for {
-		_, _, err = itr.Next()
-		if err != nil {
-			break
-		}
-		count++
-	}
-	if count != 500000 {
-		log.Fatal("incorrect count != 500000, count is ", count)
-	}
 	end = time.Now()
 	duration = end.Sub(start).Microseconds()
 
-	fmt.Println("scan time 50% ", duration/1000, "ms, usec per op ", float64(duration)/500000)
+	fmt.Println("read seq time ", duration/1000, "ms, usec per op ", float64(duration)/nr)
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	start = time.Now()
-
-	for i := 0; i < nr/10; i++ {
-		index := r.Intn(nr / 10)
-		_, err := db.Get([]byte(fmt.Sprintf("%07d.........", index)))
-		if err != nil {
-			panic(err)
-		}
+	err = db.Close()
+	if err != nil {
+		log.Fatal("unable to close", err)
 	}
-	end = time.Now()
-	duration = end.Sub(start).Microseconds()
-
-	fmt.Println("random access time ", float64(duration)/(nr/10), "us per get")
-
-	db.Close()
 }

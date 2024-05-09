@@ -2,8 +2,9 @@ package leveldb_test
 
 import (
 	"bytes"
-	"github.com/robaho/leveldb"
 	"testing"
+
+	"github.com/robaho/leveldb"
 )
 
 func TestSnapshot_Get(t *testing.T) {
@@ -37,7 +38,7 @@ func TestSnapshot_Get(t *testing.T) {
 	if !bytes.Equal([]byte("myvalue"), val) {
 		t.Fatal("value does not match")
 	}
-	val, err = s.Get([]byte("keykey1"))
+	val, err = s.Get([]byte("mykey1"))
 	if val != nil || err != leveldb.KeyNotFound {
 		t.Fatal("should have return nil,KeyNotFound")
 	}

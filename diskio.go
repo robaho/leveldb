@@ -48,6 +48,15 @@ func writeSegmentToDisk(db *Database, seg *memorySegment) error {
 
 func writeAndLoadSegment(keyFilename, dataFilename string, itr LookupIterator, purgeDeleted bool) (segment, error) {
 
+	_, err := os.Stat(keyFilename);
+	if(err==nil || !os.IsNotExist(err)) {
+		return nil,err;
+	}
+	_, err = os.Stat(dataFilename);
+	if(err==nil || !os.IsNotExist(err)) {
+		return nil,err;
+	}
+
 	keyFilenameTmp := keyFilename + ".tmp"
 	dataFilenameTmp := dataFilename + ".tmp"
 

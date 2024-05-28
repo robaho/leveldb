@@ -148,12 +148,7 @@ func dbsize(path string) string {
 	return fmt.Sprintf("%.1dM", size/(1024*1024))
 }
 
-func testRead() {
-	db, err := leveldb.Open("test/mydb", leveldb.Options{})
-	if err != nil {
-		log.Fatal("unable to open database", err)
-	}
-
+func testReadRandom(db *leveldb.Database) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	keys := r.Perm(nr);
 
@@ -168,12 +163,14 @@ func testRead() {
 	duration := end.Sub(start).Microseconds()
 
 	fmt.Println("read random time ", float64(duration)/(nr), "us per get")
+}
 
-	start = time.Now()
+func testReadSequential(db *leveldb.Database) {
+	start := time.Now()
 	itr, _ := db.Lookup(nil, nil)
 	count := 0
 	for {
-		_, _, err = itr.Next()
+		_, _, err := itr.Next()
 		if err != nil {
 			break
 		}
@@ -182,12 +179,22 @@ func testRead() {
 	if count != nr {
 		log.Fatal("incorrect count != ", nr, ", count is ", count)
 	}
-	end = time.Now()
-	duration = end.Sub(start).Microseconds()
+	end := time.Now()
+	duration := end.Sub(start).Microseconds()
 
 	fmt.Println("read seq time ", duration/1000, "ms, usec per op ", float64(duration)/nr)
+}
 
-	err = db.Close()
+func testRead() {
+	db, err := leveldb.Open("test/mydb", leveldb.Options{})
+	if err != nil {
+		log.Fatal("unable to open database", err)
+	}
+	testReadRandom(db)
+	testReadRandom(db)
+	testReadSequential(db)
+
+	err = db.Close();
 	if err != nil {
 		log.Fatal("unable to close", err)
 	}

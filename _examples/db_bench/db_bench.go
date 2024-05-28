@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/robaho/leveldb"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"runtime"
 	"time"
+
+	"github.com/robaho/leveldb"
 )
 
 // benchmark similar in scope to leveldb db_bench.cc, uses 16 byte keys and 100 byte values
@@ -152,11 +153,12 @@ func testRead() {
 	if err != nil {
 		log.Fatal("unable to open database", err)
 	}
-	start := time.Now()
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := 0; i < nr/10; i++ {
-		index := r.Intn(nr / 10)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	keys := r.Perm(nr);
+
+	start := time.Now()
+	for _, index := range keys {
 		_, err := db.Get([]byte(fmt.Sprintf("%07d.........", index)))
 		if err != nil {
 			panic(err)
@@ -165,10 +167,10 @@ func testRead() {
 	end := time.Now()
 	duration := end.Sub(start).Microseconds()
 
-	fmt.Println("read random time ", float64(duration)/(nr/10), "us per get")
+	fmt.Println("read random time ", float64(duration)/(nr), "us per get")
 
 	start = time.Now()
-	itr, err := db.Lookup(nil, nil)
+	itr, _ := db.Lookup(nil, nil)
 	count := 0
 	for {
 		_, _, err = itr.Next()

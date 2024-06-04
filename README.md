@@ -3,8 +3,6 @@
 high performance key value database written in Go. The api is based on Google's [leveldb](http://github.com/google/leveldb). The implementation is based on
 the http://github.com/robaho/keydb.
 
-**Note: snapshot support is currently under development.**
-
 bulk insert and sequential read < 1 micro sec
 
 random access read of disk based record < 4 micro secs
@@ -42,6 +40,8 @@ seek to end, backwards iteration
     }
 
 # Performance
+
+See the [C++ version](https://github.com/robaho/cpp_leveldb) for an in-depth comparison of the Go, Java, and C++ versions.
 
 DbBench using Go 1.19.2
 

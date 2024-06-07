@@ -38,6 +38,9 @@ func newDeleter(path string) Deleter {
 }
 
 func (d *dbDeleter) scheduleDeletion(filesToDelete []string) error {
+	if len(filesToDelete) == 0 {
+		return nil;
+	} 
 	if d.file == nil {
 		file, err := os.OpenFile(filepath.Join(d.path, "deleted"), os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_SYNC, 0600)
 		if err != nil {
@@ -68,6 +71,9 @@ func (d *dbDeleter) deleteScheduled() error {
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := s.Text()
+		// if line=="" {
+		// 	continue;
+		// }
 		//fmt.Println("deleted:", line)
 		files := strings.Split(line, ",")
 		for _, file := range files {

@@ -2,7 +2,6 @@ package leveldb
 
 import (
 	"bytes"
-	"github.com/nightlyone/lockfile"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/nightlyone/lockfile"
 )
 
 const dbMemorySegment = 1024 * 1024
@@ -288,7 +289,7 @@ func (db *Database) CloseWithMerge(segmentCount uint) error {
 	db.state = state
 
 	if segmentCount > 0 {
-		db.err = mergeSegments0(db, segmentCount)
+		db.err = mergeSegments0(db, segmentCount, false)
 	}
 
 	if db.err != nil {

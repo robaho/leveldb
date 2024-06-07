@@ -378,10 +378,7 @@ func (ds *diskSegment) Get(key []byte) ([]byte, error) {
 }
 
 func binarySearch(ds *diskSegment, key []byte) (offset int64, length uint32, err error) {
-	buffer := make([]byte, maxKeySize+2) // enough room to read the starting key of each block
-
-	var lowblock int64 = 0
-	highblock := ds.keyBlocks - 1
+	var buffer [maxKeySize]byte
 
 	// use memory index to narrow search
 	index := sort.Search(len(ds.keyIndex), func(i int) bool {
@@ -394,14 +391,14 @@ func binarySearch(ds *diskSegment, key []byte) (offset int64, length uint32, err
 
 	index--
 
-	lowblock = int64(index * keyIndexInterval)
-	highblock = lowblock + int64(keyIndexInterval)
+	var lowblock = int64(index * keyIndexInterval)
+	var highblock = lowblock + int64(keyIndexInterval)
 
 	if highblock >= ds.keyBlocks {
 		highblock = ds.keyBlocks - 1
 	}
 
-	block, err := binarySearch0(ds, lowblock, highblock, key, buffer)
+	block, err := binarySearch0(ds, lowblock, highblock, key, buffer[:])
 	if err != nil {
 		return 0, 0, err
 	}
@@ -436,9 +433,9 @@ func binarySearch0(ds *diskSegment, lowBlock int64, highBlock int64, key []byte,
 }
 
 func scanBlock(ds *diskSegment, block int64, key []byte) (offset int64, len uint32, err error) {
-	buffer := make([]byte, keyBlockSize)
+	var buffer [keyBlockSize]byte
 
-	_, err = ds.keyFile.ReadAt(buffer, block*keyBlockSize)
+	_, err = ds.keyFile.ReadAt(buffer[:], block*keyBlockSize)
 	if err != nil {
 		return 0, 0, err
 	}

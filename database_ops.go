@@ -151,6 +151,6 @@ func (db *Database) maybeMerge() {
 	}
 	state := db.getState()
 	if len(state.segments) > int(2*db.options.MaxSegments) {
-		mergeSegments0(db, db.options.MaxSegments)
+		wakeupMerger(db)
 	}
 }

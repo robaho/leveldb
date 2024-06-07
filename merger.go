@@ -29,7 +29,7 @@ func mergeSegments(db *Database) {
 
 		db.wg.Add(1)
 
-		err := mergeSegments0(db, db.options.MaxSegments)
+		err := mergeSegments0(db, db.options.MaxSegments, true)
 		db.Lock()
 		if err != nil {
 			db.err = errors.New("unable to merge segments: " + err.Error())
@@ -40,7 +40,11 @@ func mergeSegments(db *Database) {
 	}
 }
 
-func mergeSegments0(db *Database, segmentCount uint) error {
+func wakeupMerger(db *Database) {
+	db.merger <- true
+}
+
+func mergeSegments0(db *Database, segmentCount uint, throttle bool) error {
 	// only a single routine can be in mergeSegments0 to avoid deadlock
 	if !atomic.CompareAndSwapInt32(&db.inMerge, 0, 1) {
 		return nil
@@ -120,7 +124,9 @@ func mergeSegments0(db *Database, segmentCount uint) error {
 		db.setState(&dbState{segments: newsegments, memory: db.state.memory, multi: newMultiSegment(copyAndAppend(newsegments, db.state.memory))})
 		index++
 		db.Unlock()
-		time.Sleep(100 * time.Millisecond)
+		if throttle {
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 }
 

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/robaho/leveldb"
@@ -22,6 +25,20 @@ var value []byte
 var dbname = "test/mydb"
 
 func main() {
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+
+	flag.Parse()
+    if *cpuprofile != "" {
+        f, err := os.Create(*cpuprofile)
+        if err != nil {
+            log.Fatal("could not create CPU profile: ", err)
+        }
+        defer f.Close() // error handling omitted for example
+        if err := pprof.StartCPUProfile(f); err != nil {
+            log.Fatal("could not start CPU profile: ", err)
+        }
+        defer pprof.StopCPUProfile()
+    }
 
 	value = make([]byte, vSize)
 	rand.Read(value)
